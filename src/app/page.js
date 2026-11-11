@@ -9,18 +9,41 @@ const SETTINGS_KEY = "ai-dino-settings";
 const MOVEMENTS = [
   { name: "Jump", key: "jump", symbol: "↑", description: "Jump up" },
   { name: "Duck", key: "duck", symbol: "↓", description: "Crouch down" },
-  { name: "Neutral", key: "neutral", symbol: "●", description: "Stand normally" },
+  {
+    name: "Neutral",
+    key: "neutral",
+    symbol: "●",
+    description: "Stand normally",
+  },
 ];
 
-// Recognizes JUMP1, JUMP2, Duck5, NEUTRAL3, etc.
+/*
+  Recognizes any class beginning with:
+  JUMP     -> jump
+  DUCK     -> duck
+  NEUTRAL  -> neutral
+
+  Examples:
+  JUMP1, JUMP2, JUMP20, JUMP100
+  DUCK1, DUCK7, DUCK20
+  NEUTRAL1, NEUTRAL12, NEUTRAL50
+
+  Class names are case-insensitive.
+*/
 function getMovementGroup(label) {
-  const normalized = label.toLowerCase().trim().replace(/\s+/g, "");
+  const normalized = String(label || "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "");
 
-  const match = normalized.match(/^(jump|duck|neutral)([1-5])$/);
+  if (normalized.startsWith("jump")) return "jump";
+  if (normalized.startsWith("duck")) return "duck";
+  if (normalized.startsWith("neutral")) return "neutral";
 
-  return match ? match[1] : null;
+  return null;
 }
 
+// Add together the probabilities of ALL classes belonging to each movement.
 function getGroupedPredictions(results) {
   const groups = {
     jump: 0,
@@ -39,6 +62,7 @@ function getGroupedPredictions(results) {
   return groups;
 }
 
+// Count all classes belonging to a movement, regardless of their number.
 function getClassCount(classes, movement) {
   return classes.filter(
     (label) => getMovementGroup(label) === movement
@@ -70,11 +94,14 @@ export default function Home() {
     controlRef.current = action;
   }, []);
 
-  // Hidden shortcut: Ctrl + Shift + S opens AI Model Settings.
-  // No link or button is added to the game interface.
+  // Hidden Settings shortcut: Ctrl + Shift + S.
   useEffect(() => {
     const handleSettingsShortcut = (event) => {
-      if (event.ctrlKey && event.shiftKey && event.code === "KeyS") {
+      if (
+        event.ctrlKey &&
+        event.shiftKey &&
+        event.code === "KeyS"
+      ) {
         event.preventDefault();
         window.location.href = "/settings";
       }
@@ -92,8 +119,7 @@ export default function Home() {
       setCameraError("");
       setAiError("");
 
-      // Read the model URL and confidence saved on the AI Settings page.
-      // The environment variable remains as a fallback.
+      // Read the model URL and confidence saved on the Settings page.
       let savedSettings = null;
 
       try {
@@ -116,28 +142,27 @@ export default function Home() {
         configuredModelUrl.includes("YOUR_MODEL_ID")
       ) {
         throw new Error(
-          "Open AI Model Settings with Ctrl + Shift + S and save your Teachable Machine model URL first."
+          "Open Settings using Ctrl + Shift + S and add your Teachable Machine model URL."
         );
       }
 
       if (
-        !Number.isFinite(configuredConfidence) ||
+        Number.isNaN(configuredConfidence) ||
         configuredConfidence < 1 ||
         configuredConfidence > 100
       ) {
         throw new Error(
-          "Your saved recognition confidence is invalid. Open AI Model Settings and save it again."
+          "Your confidence setting must be between 1 and 100."
         );
       }
 
-      confidenceThresholdRef.current = configuredConfidence / 100;
+      confidenceThresholdRef.current =
+        configuredConfidence / 100;
 
       if (!modelRef.current) {
-        const cleanModelUrl = configuredModelUrl
-          .trim()
-          .replace(/\/+$/, "");
-
-        const modelURL = cleanModelUrl + "/";
+        const modelURL = configuredModelUrl.endsWith("/")
+          ? configuredModelUrl
+          : configuredModelUrl + "/";
 
         modelRef.current = await tmImage.load(
           modelURL + "model.json",
@@ -149,6 +174,17 @@ export default function Home() {
         setClasses(loadedClasses);
 
         console.log("Teachable Machine classes:", loadedClasses);
+
+        // Check that the model has at least one class for each movement.
+        const jumpCount = getClassCount(loadedClasses, "jump");
+        const duckCount = getClassCount(loadedClasses, "duck");
+        const neutralCount = getClassCount(loadedClasses, "neutral");
+
+        if (jumpCount === 0 || duckCount === 0 || neutralCount === 0) {
+          throw new Error(
+            "Your model needs at least one JUMP, one DUCK, and one NEUTRAL class. Check the class names in Teachable Machine."
+          );
+        }
 
         setModelReady(true);
       }
@@ -175,10 +211,13 @@ export default function Home() {
 
       setAiEnabled(true);
     } catch (error) {
-      setAiError(error.message || "Could not start the AI camera.");
+      setAiError(
+        error.message || "Could not start the AI camera."
+      );
     }
   };
 
+  // AI prediction loop.
   useEffect(() => {
     if (!cameraReady || !modelReady || !aiEnabled) return;
 
@@ -199,9 +238,12 @@ export default function Home() {
 
         if (!active) return;
 
-        // Combine all five class probabilities for each movement.
+        // Combine every matching class into three movement groups.
         const grouped = getGroupedPredictions(results);
 
+        console.log("Grouped predictions:", grouped);
+
+        // Find the movement with the highest combined probability.
         const highest = Object.entries(grouped).reduce(
           (best, current) =>
             current[1] > best[1] ? current : best,
@@ -210,15 +252,22 @@ export default function Home() {
 
         const [bestMovement, bestProbability] = highest;
 
-        // Use the recognition-confidence value saved in Settings.
-        const isRecognized =
-          bestProbability >= confidenceThresholdRef.current;
+        const threshold = confidenceThresholdRef.current;
 
-        const action = isRecognized ? bestMovement : "neutral";
+        // Only activate a movement if it reaches the confidence threshold.
+        let action = "neutral";
 
-        // Show grouped movements instead of individual class names.
+        if (bestProbability >= threshold) {
+          action = bestMovement;
+        }
+
+        // Display the grouped movement, not individual class names.
+        const isRecognized = bestProbability >= threshold;
+
         setPrediction(
-          isRecognized ? bestMovement.toUpperCase() : "Waiting"
+          isRecognized
+            ? bestMovement.toUpperCase()
+            : "Waiting"
         );
 
         setConfidence(bestProbability);
@@ -248,10 +297,13 @@ export default function Home() {
     };
   }, [cameraReady, modelReady, aiEnabled, setControl]);
 
+  // Stop the camera when the page is closed.
   useEffect(() => {
     return () => {
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current
+          .getTracks()
+          .forEach((track) => track.stop());
       }
     };
   }, []);
@@ -266,7 +318,9 @@ export default function Home() {
 
   const handleGameOver = (finalScore) => {
     setScore(finalScore);
-    setBestScore((previous) => Math.max(previous, finalScore));
+    setBestScore((previous) =>
+      Math.max(previous, finalScore)
+    );
     setGameStatus("over");
   };
 
@@ -287,8 +341,12 @@ export default function Home() {
         </a>
 
         <div className="header-status">
-          <span className={`dot ${modelReady ? "active" : ""}`} />
-          {modelReady ? "AI MODEL CONNECTED" : "AI MODEL NOT CONNECTED"}
+          <span
+            className={`dot ${modelReady ? "active" : ""}`}
+          />
+          {modelReady
+            ? "AI MODEL CONNECTED"
+            : "AI MODEL NOT CONNECTED"}
         </div>
       </header>
 
@@ -368,9 +426,14 @@ export default function Home() {
           />
 
           <div className="game-actions">
-            <button className="primary-button" onClick={restartGame}>
+            <button
+              className="primary-button"
+              onClick={restartGame}
+            >
               <span>▶</span>
-              {gameStatus === "playing" ? "RESTART GAME" : "START GAME"}
+              {gameStatus === "playing"
+                ? "RESTART GAME"
+                : "START GAME"}
             </button>
 
             <p className="keyboard-hint">
@@ -385,7 +448,9 @@ export default function Home() {
           <div className="ai-panel-heading">
             <div className="ai-heading-icon">✧</div>
             <div>
-              <span className="section-kicker">BODY MOVEMENT CONTROL</span>
+              <span className="section-kicker">
+                BODY MOVEMENT CONTROL
+              </span>
               <h2>AI Control Center</h2>
             </div>
           </div>
@@ -396,18 +461,28 @@ export default function Home() {
               autoPlay
               muted
               playsInline
-              className={`camera-video ${cameraReady ? "" : "hidden"}`}
+              className={`camera-video ${
+                cameraReady ? "" : "hidden"
+              }`}
             />
 
             {!cameraReady && (
               <div className="camera-placeholder">
-                <div className="camera-placeholder-icon">◎</div>
+                <div className="camera-placeholder-icon">
+                  ◎
+                </div>
                 <strong>Your camera goes here</strong>
-                <p>Connect the camera to let AI see your movements.</p>
+                <p>
+                  Connect the camera to let AI see your movements.
+                </p>
               </div>
             )}
 
-            <span className={`camera-label ${cameraReady ? "live" : ""}`}>
+            <span
+              className={`camera-label ${
+                cameraReady ? "live" : ""
+              }`}
+            >
               <span />
               {cameraReady ? "LIVE CAMERA" : "CAMERA OFF"}
             </span>
@@ -423,29 +498,43 @@ export default function Home() {
               : "CONNECT AI + CAMERA"}
           </button>
 
-          {cameraError && <p className="error">{cameraError}</p>}
-          {aiError && <p className="error">{aiError}</p>}
+          {cameraError && (
+            <p className="error">{cameraError}</p>
+          )}
+
+          {aiError && (
+            <p className="error">{aiError}</p>
+          )}
 
           <div className="prediction-box">
             <div className="prediction-top">
-              <span className="small-label">AI DETECTED MOVEMENT</span>
+              <span className="small-label">
+                AI DETECTED MOVEMENT
+              </span>
+
               <span className="live-indicator">
                 <span />
                 LIVE
               </span>
             </div>
 
-            <h3 className="prediction-value">{prediction.toUpperCase()}</h3>
+            <h3 className="prediction-value">
+              {prediction.toUpperCase()}
+            </h3>
 
             <div className="confidence-row">
               <span>AI confidence</span>
-              <strong>{(confidence * 100).toFixed(1)}%</strong>
+              <strong>
+                {(confidence * 100).toFixed(1)}%
+              </strong>
             </div>
 
             <div className="confidence-track">
               <div
                 className="confidence-fill"
-                style={{ width: `${confidence * 100}%` }}
+                style={{
+                  width: `${confidence * 100}%`,
+                }}
               />
             </div>
           </div>
@@ -457,11 +546,18 @@ export default function Home() {
             </div>
 
             {MOVEMENTS.map((movement) => {
-              const count = getClassCount(classes, movement.key);
-              const loaded = count === 5;
+              const count = getClassCount(
+                classes,
+                movement.key
+              );
+
+              const loaded = count > 0;
 
               return (
-                <div className="movement-item" key={movement.key}>
+                <div
+                  className="movement-item"
+                  key={movement.key}
+                >
                   <span className="movement-symbol">
                     {movement.symbol}
                   </span>
@@ -471,20 +567,32 @@ export default function Home() {
                     <span>{movement.description}</span>
                   </div>
 
-                  <span className={`movement-state ${loaded ? "loaded" : ""}`}>
-                    {loaded ? "5/5 READY" : `${count}/5 CLASSES`}
+                  <span
+                    className={`movement-state ${
+                      loaded ? "loaded" : ""
+                    }`}
+                  >
+                    {loaded
+                      ? `${count} CLASSES`
+                      : "NOT FOUND"}
                   </span>
                 </div>
               );
             })}
           </div>
 
-          <button className="secondary-button" onClick={toggleAI}>
-            {aiEnabled ? "Ⅱ  PAUSE AI CONTROL" : "▶  RESUME AI CONTROL"}
+          <button
+            className="secondary-button"
+            onClick={toggleAI}
+          >
+            {aiEnabled
+              ? "Ⅱ  PAUSE AI CONTROL"
+              : "▶  RESUME AI CONTROL"}
           </button>
 
           <p className="camera-note">
-            You can also play with your keyboard if the camera is not connected.
+            You can also play with your keyboard if the camera is
+            not connected.
           </p>
         </aside>
       </section>
@@ -494,36 +602,44 @@ export default function Home() {
           <span className="section-kicker">HOW IT WORKS</span>
           <h2>Three movements. One dinosaur.</h2>
           <p>
-            Train the AI, show it your movements, and watch the dinosaur react!
+            Train the AI, show it your movements, and watch the
+            dinosaur react!
           </p>
         </div>
 
         <div className="instruction-grid">
           <div className="instruction-card">
-            <div className="instruction-icon jump-icon">↑</div>
+            <div className="instruction-icon jump-icon">
+              ↑
+            </div>
             <div>
               <h3>JUMP</h3>
               <p>
-                Raise your body or perform your trained jump movement to jump
-                over obstacles.
+                Raise your body or perform your trained jump
+                movement to jump over obstacles.
               </p>
             </div>
             <span className="instruction-number">01</span>
           </div>
 
           <div className="instruction-card">
-            <div className="instruction-icon duck-icon">↓</div>
+            <div className="instruction-icon duck-icon">
+              ↓
+            </div>
             <div>
               <h3>DUCK</h3>
               <p>
-                Crouch down to make the dinosaur duck under flying obstacles.
+                Crouch down to make the dinosaur duck under
+                flying obstacles.
               </p>
             </div>
             <span className="instruction-number">02</span>
           </div>
 
           <div className="instruction-card">
-            <div className="instruction-icon neutral-icon">●</div>
+            <div className="instruction-icon neutral-icon">
+              ●
+            </div>
             <div>
               <h3>NEUTRAL</h3>
               <p>
@@ -618,8 +734,13 @@ function Game({
     const drawDino = () => {
       const d = state.dino;
       const x = d.x;
-      const y = d.ducking && !d.jumping ? ground - 34 : d.y;
-      const runningFrame = Math.floor(state.frame / 6) % 2;
+      const y =
+        d.ducking && !d.jumping
+          ? ground - 34
+          : d.y;
+
+      const runningFrame =
+        Math.floor(state.frame / 6) % 2;
 
       ctx.save();
       ctx.translate(x, y);
@@ -711,20 +832,56 @@ function Game({
         ctx.fillStyle = "#8d4938";
 
         if (flap === 0) {
-          ctx.fillRect(obstacle.x + 8, obstacle.y - 10, 14, 10);
+          ctx.fillRect(
+            obstacle.x + 8,
+            obstacle.y - 10,
+            14,
+            10
+          );
         } else {
-          ctx.fillRect(obstacle.x + 8, obstacle.y + 13, 14, 9);
+          ctx.fillRect(
+            obstacle.x + 8,
+            obstacle.y + 13,
+            14,
+            9
+          );
         }
 
         ctx.fillStyle = "#ffffff";
-        ctx.fillRect(obstacle.x + 28, obstacle.y - 4, 4, 4);
+        ctx.fillRect(
+          obstacle.x + 28,
+          obstacle.y - 4,
+          4,
+          4
+        );
       } else {
         ctx.fillStyle = "#3c7a4e";
-        ctx.fillRect(obstacle.x + 8, obstacle.y, 22, obstacle.height);
-        ctx.fillRect(obstacle.x, obstacle.y + 14, 11, 20);
-        ctx.fillRect(obstacle.x + 23, obstacle.y + 22, 12, 18);
+        ctx.fillRect(
+          obstacle.x + 8,
+          obstacle.y,
+          22,
+          obstacle.height
+        );
+        ctx.fillRect(
+          obstacle.x,
+          obstacle.y + 14,
+          11,
+          20
+        );
+        ctx.fillRect(
+          obstacle.x + 23,
+          obstacle.y + 22,
+          12,
+          18
+        );
+
         ctx.fillStyle = "#559465";
-        ctx.fillRect(obstacle.x + 12, obstacle.y + 4, 5, 12);
+        ctx.fillRect(
+          obstacle.x + 12,
+          obstacle.y + 4,
+          5,
+          12
+        );
       }
     };
 
@@ -760,14 +917,19 @@ function Game({
       ctx.fillStyle = "#b5cdbb";
 
       for (let i = 0; i < 24; i++) {
-        const x = (i * 48 - state.groundOffset) % canvas.width;
+        const x =
+          (i * 48 - state.groundOffset) % canvas.width;
+
         ctx.fillRect(x, ground + 12, 18, 2);
       }
 
       state.obstacles.forEach(drawObstacle);
       drawDino();
 
-      if (statusRef.current === "ready" || state.gameOver) {
+      if (
+        statusRef.current === "ready" ||
+        state.gameOver
+      ) {
         ctx.fillStyle = "rgba(234,245,238,0.78)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -805,28 +967,44 @@ function Game({
     };
 
     const update = (delta) => {
-      if (statusRef.current !== "playing" || state.gameOver) return;
+      if (
+        statusRef.current !== "playing" ||
+        state.gameOver
+      ) {
+        return;
+      }
 
       const factor = Math.min(delta / 16.67, 2);
 
       state.frame += factor;
       state.score += 0.12 * factor;
-      state.speed = Math.min(11, 5 + state.score / 250);
+      state.speed = Math.min(
+        11,
+        5 + state.score / 250
+      );
 
       state.groundOffset =
-        (state.groundOffset + state.speed * factor) % canvas.width;
+        (state.groundOffset + state.speed * factor) %
+        canvas.width;
 
       const action = controlRef.current;
 
-      if (action === "jump" && state.lastAction !== "jump") {
+      if (
+        action === "jump" &&
+        state.lastAction !== "jump"
+      ) {
         jump();
       }
 
       state.lastAction = action;
-      state.dino.ducking = action === "duck" && !state.dino.jumping;
+
+      state.dino.ducking =
+        action === "duck" && !state.dino.jumping;
 
       if (state.dino.jumping) {
-        state.dino.y += state.dino.velocityY * factor;
+        state.dino.y +=
+          state.dino.velocityY * factor;
+
         state.dino.velocityY += 0.7 * factor;
 
         if (state.dino.y >= ground - 58) {
@@ -847,17 +1025,22 @@ function Game({
       state.nextObstacle -= factor;
 
       if (state.nextObstacle <= 0) {
-        const type = Math.random() > 0.5 ? "cactus" : "bird";
+        const type =
+          Math.random() > 0.5 ? "cactus" : "bird";
 
         state.obstacles.push({
           x: canvas.width + 25,
-          y: type === "bird" ? ground - 76 : ground - 45,
+          y:
+            type === "bird"
+              ? ground - 76
+              : ground - 45,
           width: type === "bird" ? 39 : 35,
           height: type === "bird" ? 18 : 45,
           type,
         });
 
-        state.nextObstacle = 95 + Math.random() * 65;
+        state.nextObstacle =
+          95 + Math.random() * 65;
       }
 
       state.clouds.forEach((cloud) => {
@@ -872,7 +1055,8 @@ function Game({
         hill.x -= 0.25 * factor;
 
         if (hill.x < -hill.width) {
-          hill.x = canvas.width + hill.width / 2;
+          hill.x =
+            canvas.width + hill.width / 2;
         }
       });
 
@@ -880,35 +1064,50 @@ function Game({
 
       const player = {
         x: d.x + 3,
-        y: d.ducking ? ground - 34 : d.y + 8,
+        y: d.ducking
+          ? ground - 34
+          : d.y + 8,
         width: d.ducking ? 62 : 58,
         height: d.ducking ? 32 : 48,
       };
 
       for (const obstacle of state.obstacles) {
         const hit =
-          player.x < obstacle.x + obstacle.width - 5 &&
-          player.x + player.width > obstacle.x + 4 &&
-          player.y < obstacle.y + obstacle.height - 3 &&
-          player.y + player.height > obstacle.y + 3;
+          player.x <
+            obstacle.x + obstacle.width - 5 &&
+          player.x + player.width >
+            obstacle.x + 4 &&
+          player.y <
+            obstacle.y + obstacle.height - 3 &&
+          player.y + player.height >
+            obstacle.y + 3;
 
         if (hit) {
           state.gameOver = true;
           statusRef.current = "over";
+
           gameStatusCallbackRef.current("over");
-          gameOverCallbackRef.current(Math.floor(state.score));
+
+          gameOverCallbackRef.current(
+            Math.floor(state.score)
+          );
+
           break;
         }
       }
 
-      scoreCallbackRef.current(Math.floor(state.score));
+      scoreCallbackRef.current(
+        Math.floor(state.score)
+      );
     };
 
     let animationFrame;
     let lastFrameTime = 0;
 
     const drawLoop = (time) => {
-      if (!lastFrameTime) lastFrameTime = time;
+      if (!lastFrameTime) {
+        lastFrameTime = time;
+      }
 
       const delta = time - lastFrameTime;
       lastFrameTime = time;
@@ -916,11 +1115,15 @@ function Game({
       update(delta);
       draw();
 
-      animationFrame = requestAnimationFrame(drawLoop);
+      animationFrame =
+        requestAnimationFrame(drawLoop);
     };
 
     const handleKeyDown = (event) => {
-      if (event.code === "Space" || event.code === "ArrowUp") {
+      if (
+        event.code === "Space" ||
+        event.code === "ArrowUp"
+      ) {
         event.preventDefault();
 
         if (statusRef.current === "playing") {
@@ -950,12 +1153,21 @@ function Game({
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
 
-    animationFrame = requestAnimationFrame(drawLoop);
+    animationFrame =
+      requestAnimationFrame(drawLoop);
 
     return () => {
       cancelAnimationFrame(animationFrame);
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
+
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+
+      window.removeEventListener(
+        "keyup",
+        handleKeyUp
+      );
     };
   }, [controlRef]);
 

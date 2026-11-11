@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -10,31 +11,37 @@ const MOVEMENTS = [
   {
     name: "JUMP",
     description: "Make the dinosaur jump over obstacles.",
-    labels: ["JUMP1", "JUMP2", "JUMP3", "JUMP4", "JUMP5"],
     symbol: "↑",
   },
   {
     name: "DUCK",
     description: "Make the dinosaur crouch under obstacles.",
-    labels: ["DUCK1", "DUCK2", "DUCK3", "DUCK4", "DUCK5"],
     symbol: "↓",
   },
   {
     name: "NEUTRAL",
     description: "Keep the dinosaur running normally.",
-    labels: ["NEUTRAL1", "NEUTRAL2", "NEUTRAL3", "NEUTRAL4", "NEUTRAL5"],
     symbol: "●",
   },
 ];
 
+// Recognizes any class beginning with JUMP, DUCK, or NEUTRAL.
+// Examples: JUMP1, JUMP20, JUMP100, DUCK5, NEUTRAL50.
 function normalizeLabel(label) {
-  return label.toUpperCase().replace(/\s+/g, "").trim();
+  return String(label || "")
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .trim();
 }
 
 function getMovement(label) {
   const normalized = normalizeLabel(label);
-  const match = normalized.match(/^(JUMP|DUCK|NEUTRAL)[1-5]$/);
-  return match ? match[1] : null;
+
+  if (normalized.startsWith("JUMP")) return "JUMP";
+  if (normalized.startsWith("DUCK")) return "DUCK";
+  if (normalized.startsWith("NEUTRAL")) return "NEUTRAL";
+
+  return null;
 }
 
 export default function SettingsPage() {
@@ -48,6 +55,7 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
+  // Load previously saved settings.
   useEffect(() => {
     try {
       const stored = localStorage.getItem(SETTINGS_KEY);
@@ -59,25 +67,35 @@ export default function SettingsPage() {
         setConfidence(settings.confidence ?? 85);
         setClasses(settings.classes || []);
         setSavedClasses(settings.classes || []);
-        setTested(Boolean(settings.modelUrl && settings.classes?.length));
+
+        setTested(
+          Boolean(
+            settings.modelUrl &&
+            settings.classes?.length
+          )
+        );
       }
     } catch (err) {
       console.error("Could not load saved AI settings:", err);
     }
   }, []);
-useEffect(() => {
-  const handleEscape = (event) => {
-    if (event.key === "Escape") {
-      window.location.href = "/";
-    }
-  };
 
-  window.addEventListener("keydown", handleEscape);
+  // Escape returns to the game.
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        window.location.href = "/";
+      }
+    };
 
-  return () => {
-    window.removeEventListener("keydown", handleEscape);
-  };
-}, []);
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  // Test and load the Teachable Machine model.
   const testModel = async () => {
     setError("");
     setMessage("");
@@ -93,9 +111,13 @@ useEffect(() => {
     }
 
     if (
-      !cleanUrl.startsWith("https://teachablemachine.withgoogle.com/models/")
+      !cleanUrl.startsWith(
+        "https://teachablemachine.withgoogle.com/models/"
+      )
     ) {
-      setError("Please enter a valid Teachable Machine shareable model URL.");
+      setError(
+        "Please enter a valid Teachable Machine shareable model URL."
+      );
       return;
     }
 
@@ -104,29 +126,36 @@ useEffect(() => {
     try {
       const model = await tmImage.load(
         `${cleanUrl}/model.json`,
-        `${cleanUrl}/metadata.json`,
+        `${cleanUrl}/metadata.json`
       );
 
       const labels = model.getClassLabels();
 
       if (!labels || labels.length === 0) {
-        throw new Error("The model loaded, but no class names were found.");
+        throw new Error(
+          "The model loaded, but no class names were found."
+        );
       }
 
       setClasses(labels);
       setTested(true);
-      setMessage(`Model loaded successfully. Found ${labels.length} classes.`);
+
+      setMessage(
+        `Model loaded successfully. Found ${labels.length} classes.`
+      );
     } catch (err) {
       console.error("Model test failed:", err);
+
       setError(
         err.message ||
-          "Could not load this model. Check the URL and try again.",
+          "Could not load this model. Check the URL and try again."
       );
     } finally {
       setTesting(false);
     }
   };
 
+  // Save the tested model settings.
   const saveSettings = () => {
     setError("");
     setMessage("");
@@ -141,40 +170,88 @@ useEffect(() => {
       return;
     }
 
+    const groups = {
+      JUMP: classes.filter(
+        (label) => getMovement(label) === "JUMP"
+      ),
+      DUCK: classes.filter(
+        (label) => getMovement(label) === "DUCK"
+      ),
+      NEUTRAL: classes.filter(
+        (label) => getMovement(label) === "NEUTRAL"
+      ),
+    };
+
+    const missingMovements = Object.entries(groups)
+      .filter(([, labels]) => labels.length === 0)
+      .map(([movement]) => movement);
+
+    if (missingMovements.length > 0) {
+      setError(
+        `Your model is missing these movements: ${missingMovements.join(
+          ", "
+        )}. Add at least one class for each movement.`
+      );
+      return;
+    }
+
     const settings = {
-      modelUrl: modelUrl.trim().replace(/\/+$/, "") + "/",
+      modelUrl:
+        modelUrl.trim().replace(/\/+$/, "") + "/",
       confidence,
       classes,
       savedAt: new Date().toISOString(),
     };
 
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      localStorage.setItem(
+        SETTINGS_KEY,
+        JSON.stringify(settings)
+      );
+
       setSavedClasses(classes);
       setSaved(true);
+
       setMessage("Your AI model settings have been saved!");
     } catch (err) {
       console.error("Could not save settings:", err);
-      setError("Your settings could not be saved in this browser.");
+
+      setError(
+        "Your settings could not be saved in this browser."
+      );
     }
   };
 
+  // Group every detected class into its movement.
   const movementCounts = MOVEMENTS.map((movement) => ({
     ...movement,
-    found: classes.filter((label) => getMovement(label) === movement.name),
+    found: classes.filter(
+      (label) => getMovement(label) === movement.name
+    ),
   }));
 
-  const totalExpectedClasses = 15;
   const validClassCount = movementCounts.reduce(
     (total, movement) => total + movement.found.length,
-    0,
+    0
   );
 
-  const hasAllClasses = movementCounts.every(
-    (movement) => movement.found.length === 5,
+  // Each movement needs at least one class.
+  const hasAllMovements = movementCounts.every(
+    (movement) => movement.found.length >= 1
   );
 
-  const otherClasses = classes.filter((label) => !getMovement(label));
+  const otherClasses = classes.filter(
+    (label) => !getMovement(label)
+  );
+
+  const displayedMovements = tested
+    ? movementCounts
+    : MOVEMENTS.map((movement) => ({
+        ...movement,
+        found: savedClasses.filter(
+          (label) => getMovement(label) === movement.name
+        ),
+      }));
 
   return (
     <main className="page settings-page">
@@ -190,14 +267,25 @@ useEffect(() => {
       </header>
 
       <section className="settings-hero">
-        <span className="section-kicker">PROJECT ADMINISTRATION</span>
+        <span className="section-kicker">
+          PROJECT ADMINISTRATION
+        </span>
+
         <h1>AI Model Settings</h1>
-        <p>Connect and configure your trained AI movement recognition model.</p>
+
+        <p>
+          Connect and configure your trained AI movement
+          recognition model.
+        </p>
       </section>
 
       <section className="settings-card">
+        {/* MODEL URL */}
         <div className="settings-section">
-          <label className="settings-label" htmlFor="model-url">
+          <label
+            className="settings-label"
+            htmlFor="model-url"
+          >
             Teachable Machine Model URL
           </label>
 
@@ -224,17 +312,24 @@ useEffect(() => {
 
         <div className="settings-divider" />
 
+        {/* CONFIDENCE */}
         <div className="settings-section">
           <div className="settings-label-row">
-            <label className="settings-label" htmlFor="confidence">
+            <label
+              className="settings-label"
+              htmlFor="confidence"
+            >
               Recognition confidence
             </label>
 
-            <strong className="confidence-number">{confidence}%</strong>
+            <strong className="confidence-number">
+              {confidence}%
+            </strong>
           </div>
 
           <p className="settings-description">
-            Start at 85%. We can adjust this after testing your movements.
+            Start at 85%. We can adjust this after testing
+            your movements.
           </p>
 
           <input
@@ -259,12 +354,15 @@ useEffect(() => {
 
         <div className="settings-divider" />
 
+        {/* TEST MODEL */}
         <div className="settings-section">
-          <h2 className="settings-subheading">Test AI Model</h2>
+          <h2 className="settings-subheading">
+            Test AI Model
+          </h2>
 
           <p className="settings-description">
-            Load your model and check that its movement classes are named
-            correctly.
+            Load your model and check that its movement classes
+            are named correctly.
           </p>
 
           <button
@@ -272,20 +370,27 @@ useEffect(() => {
             onClick={testModel}
             disabled={testing}
           >
-            {testing ? "TESTING MODEL..." : "◎  TEST AI MODEL"}
+            {testing
+              ? "TESTING MODEL..."
+              : "◎  TEST AI MODEL"}
           </button>
 
           {error && (
-            <div className="settings-message settings-error">{error}</div>
+            <div className="settings-message settings-error">
+              {error}
+            </div>
           )}
 
           {message && (
-            <div className="settings-message settings-success">{message}</div>
+            <div className="settings-message settings-success">
+              {message}
+            </div>
           )}
         </div>
 
         <div className="settings-divider" />
 
+        {/* MODEL CLASSES */}
         <div className="settings-section">
           <div className="settings-label-row">
             <h2 className="settings-subheading">
@@ -293,13 +398,16 @@ useEffect(() => {
             </h2>
 
             <span className="settings-class-count">
-              {tested ? `${classes.length} CLASSES` : "NOT TESTED"}
+              {tested
+                ? `${classes.length} CLASSES`
+                : "NOT TESTED"}
             </span>
           </div>
 
           <p className="settings-description">
-            Your model should contain 15 classes, grouped into three movements.
-            Class names are detected automatically after testing.
+            Your model classes are detected automatically.
+            Any number of classes is allowed, as long as
+            their names begin with JUMP, DUCK, or NEUTRAL.
           </p>
 
           {!tested && savedClasses.length === 0 && (
@@ -308,16 +416,11 @@ useEffect(() => {
             </div>
           )}
 
-          {(tested
-            ? movementCounts
-            : MOVEMENTS.map((movement) => ({
-                ...movement,
-                found: savedClasses.filter(
-                  (label) => getMovement(label) === movement.name,
-                ),
-              }))
-          ).map((movement) => (
-            <div className="settings-movement" key={movement.name}>
+          {displayedMovements.map((movement) => (
+            <div
+              className="settings-movement"
+              key={movement.name}
+            >
               <div className="settings-movement-top">
                 <div className="settings-movement-title">
                   <span className="settings-movement-symbol">
@@ -332,17 +435,25 @@ useEffect(() => {
 
                 <span
                   className={`settings-movement-status ${
-                    movement.found.length === 5 ? "complete" : ""
+                    movement.found.length >= 1
+                      ? "complete"
+                      : ""
                   }`}
                 >
-                  {movement.found.length}/5
+                  {movement.found.length}{" "}
+                  {movement.found.length === 1
+                    ? "CLASS"
+                    : "CLASSES"}
                 </span>
               </div>
 
               <div className="settings-class-tags">
                 {movement.found.length > 0 ? (
-                  movement.found.map((label) => (
-                    <span className="settings-class-tag" key={label}>
+                  movement.found.map((label, index) => (
+                    <span
+                      className="settings-class-tag"
+                      key={`${label}-${index}`}
+                    >
                       {label}
                     </span>
                   ))
@@ -358,9 +469,13 @@ useEffect(() => {
           {tested && otherClasses.length > 0 && (
             <div className="settings-warning">
               <strong>Other class names found:</strong>
+
               <p>{otherClasses.join(", ")}</p>
+
               <span>
-                These classes are not part of the three expected movements.
+                These classes do not begin with JUMP, DUCK,
+                or NEUTRAL, so the game will not use them
+                as movement commands.
               </span>
             </div>
           )}
@@ -368,23 +483,24 @@ useEffect(() => {
           {tested && (
             <div
               className={`settings-validation ${
-                hasAllClasses ? "valid" : "invalid"
+                hasAllMovements ? "valid" : "invalid"
               }`}
             >
-              {hasAllClasses
-                ? "✓ All 15 movement classes were found."
-                : `Found ${validClassCount} of ${totalExpectedClasses} expected movement classes. Check your Teachable Machine labels.`}
+              {hasAllMovements
+                ? `✓ All three movements found. ${validClassCount} movement classes detected.`
+                : `Missing movement classes. You need at least one JUMP, one DUCK, and one NEUTRAL class.`}
             </div>
           )}
         </div>
 
         <div className="settings-divider" />
 
+        {/* SAVE SETTINGS */}
         <div className="settings-section">
           <button
             className="primary-button settings-save-button"
             onClick={saveSettings}
-            disabled={!tested || !hasAllClasses}
+            disabled={!tested || !hasAllMovements}
           >
             ✦ SAVE MODEL SETTINGS
           </button>
@@ -397,37 +513,47 @@ useEffect(() => {
         </div>
       </section>
 
+      {/* HOW THE MODEL WORKS */}
       <section className="settings-how">
-        <span className="section-kicker">HOW THE MODEL WORKS</span>
-        <h2>Three movements. Fifteen trained examples.</h2>
+        <span className="section-kicker">
+          HOW THE MODEL WORKS
+        </span>
+
+        <h2>Three movements. Unlimited examples.</h2>
 
         <p>
-          Your Teachable Machine model learns five examples of each body
-          movement. The website groups the five examples together, so the
-          dinosaur only receives three commands: JUMP, DUCK, and NEUTRAL.
+          Your Teachable Machine model can learn as many
+          examples as you want for each movement. The website
+          groups all classes beginning with the same movement
+          name, so the dinosaur only receives three commands:
+          JUMP, DUCK, and NEUTRAL.
         </p>
 
         <div className="settings-how-grid">
           <div>
-            <strong>JUMP1 – JUMP5</strong>
+            <strong>JUMP1, JUMP2, JUMP20...</strong>
             <span>Recognized as JUMP</span>
           </div>
 
           <div>
-            <strong>DUCK1 – DUCK5</strong>
+            <strong>DUCK1, DUCK5, DUCK20...</strong>
             <span>Recognized as DUCK</span>
           </div>
 
           <div>
-            <strong>NEUTRAL1 – NEUTRAL5</strong>
+            <strong>NEUTRAL1, NEUTRAL10...</strong>
             <span>Recognized as NEUTRAL</span>
           </div>
         </div>
       </section>
 
       <footer>
-        <div className="footer-brand">✦ AI MOTION LAB</div>
+        <div className="footer-brand">
+          ✦ AI MOTION LAB
+        </div>
+
         <p>A STUDENT SCIENCE FAIR PROJECT</p>
+
         <span>POWERED BY TEACHABLE MACHINE</span>
       </footer>
     </main>
