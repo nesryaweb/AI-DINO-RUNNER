@@ -191,18 +191,15 @@ export default function Home() {
   };
 
   // AI prediction loop. Runs sequentially so predictions never overlap.
+  
+  // Fast AI prediction loop. Each confident prediction is acted on immediately.
   useEffect(() => {
     if (!cameraReady || !modelReady || !aiEnabled) return;
 
     let active = true;
     let timer = null;
 
-    let candidateMovement = "neutral";
-    let candidateCount = 0;
-    let stableMovement = "neutral";
-
-    const PREDICTION_INTERVAL = 250;
-    const REQUIRED_STABLE_PREDICTIONS = 2;
+    const PREDICTION_INTERVAL = 50;
 
     const predict = async () => {
       if (!active) return;
@@ -231,28 +228,17 @@ export default function Home() {
         const recognized =
           bestProbability >= confidenceThresholdRef.current;
 
-        const detectedMovement = recognized
-          ? bestMovement
-          : "neutral";
-
         setConfidence(bestProbability);
+
         setPrediction(
           recognized ? bestMovement.toUpperCase() : "Waiting"
         );
 
-        if (detectedMovement === candidateMovement) {
-          candidateCount += 1;
-        } else {
-          candidateMovement = detectedMovement;
-          candidateCount = 1;
-        }
-
-        if (
-          candidateCount >= REQUIRED_STABLE_PREDICTIONS &&
-          candidateMovement !== stableMovement
-        ) {
-          stableMovement = candidateMovement;
-          setControl(stableMovement);
+        // Act immediately when a movement passes the confidence threshold.
+        // Ignore uncertain predictions instead of delaying or cancelling
+        // the last confidently recognized movement.
+        if (recognized) {
+          setControl(bestMovement);
         }
       } catch (error) {
         console.error("AI prediction error:", error);
@@ -270,6 +256,7 @@ export default function Home() {
       if (timer) clearTimeout(timer);
     };
   }, [cameraReady, modelReady, aiEnabled, setControl]);
+
 
   // Stop the camera when the page is closed.
   useEffect(() => {
