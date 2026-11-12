@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -9,27 +10,9 @@ const SETTINGS_KEY = "ai-dino-settings";
 const MOVEMENTS = [
   { name: "Jump", key: "jump", symbol: "↑", description: "Jump up" },
   { name: "Duck", key: "duck", symbol: "↓", description: "Crouch down" },
-  {
-    name: "Neutral",
-    key: "neutral",
-    symbol: "●",
-    description: "Stand normally",
-  },
+  { name: "Neutral", key: "neutral", symbol: "●", description: "Stand normally" },
 ];
 
-/*
-  Recognizes any class beginning with:
-  JUMP     -> jump
-  DUCK     -> duck
-  NEUTRAL  -> neutral
-
-  Examples:
-  JUMP1, JUMP2, JUMP20, JUMP100
-  DUCK1, DUCK7, DUCK20
-  NEUTRAL1, NEUTRAL12, NEUTRAL50
-
-  Class names are case-insensitive.
-*/
 function getMovementGroup(label) {
   const normalized = String(label || "")
     .toLowerCase()
@@ -43,26 +26,17 @@ function getMovementGroup(label) {
   return null;
 }
 
-// Add together the probabilities of ALL classes belonging to each movement.
 function getGroupedPredictions(results) {
-  const groups = {
-    jump: 0,
-    duck: 0,
-    neutral: 0,
-  };
+  const groups = { jump: 0, duck: 0, neutral: 0 };
 
   results.forEach((result) => {
     const group = getMovementGroup(result.className);
-
-    if (group) {
-      groups[group] += result.probability;
-    }
+    if (group) groups[group] += result.probability;
   });
 
   return groups;
 }
 
-// Count all classes belonging to a movement, regardless of their number.
 function getClassCount(classes, movement) {
   return classes.filter(
     (label) => getMovementGroup(label) === movement
@@ -74,7 +48,6 @@ export default function Home() {
   const modelRef = useRef(null);
   const streamRef = useRef(null);
   const controlRef = useRef("neutral");
-  const previousPredictionRef = useRef("neutral");
   const confidenceThresholdRef = useRef(0.85);
 
   const [cameraReady, setCameraReady] = useState(false);
@@ -119,7 +92,6 @@ export default function Home() {
       setCameraError("");
       setAiError("");
 
-      // Read the model URL and confidence saved on the Settings page.
       let savedSettings = null;
 
       try {
@@ -170,17 +142,17 @@ export default function Home() {
         );
 
         const loadedClasses = modelRef.current.getClassLabels();
-
         setClasses(loadedClasses);
 
-        console.log("Teachable Machine classes:", loadedClasses);
-
-        // Check that the model has at least one class for each movement.
         const jumpCount = getClassCount(loadedClasses, "jump");
         const duckCount = getClassCount(loadedClasses, "duck");
         const neutralCount = getClassCount(loadedClasses, "neutral");
 
-        if (jumpCount === 0 || duckCount === 0 || neutralCount === 0) {
+        if (
+          jumpCount === 0 ||
+          duckCount === 0 ||
+          neutralCount === 0
+        ) {
           throw new Error(
             "Your model needs at least one JUMP, one DUCK, and one NEUTRAL class. Check the class names in Teachable Machine."
           );
@@ -193,8 +165,9 @@ export default function Home() {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: "user",
-            width: 640,
-            height: 480,
+            width: 320,
+            height: 240,
+            frameRate: { ideal: 24, max: 30 },
           },
           audio: false,
         });
@@ -217,83 +190,84 @@ export default function Home() {
     }
   };
 
-  // AI prediction loop.
+  // AI prediction loop. Runs sequentially so predictions never overlap.
   useEffect(() => {
     if (!cameraReady || !modelReady || !aiEnabled) return;
 
     let active = true;
-    let busy = false;
+    let timer = null;
+
+    let candidateMovement = "neutral";
+    let candidateCount = 0;
+    let stableMovement = "neutral";
+
+    const PREDICTION_INTERVAL = 250;
+    const REQUIRED_STABLE_PREDICTIONS = 2;
 
     const predict = async () => {
-      if (!active || busy) return;
+      if (!active) return;
 
       const video = videoRef.current;
 
-      if (!video || video.readyState < 2) return;
-
-      busy = true;
+      if (!video || video.readyState < 2) {
+        timer = setTimeout(predict, PREDICTION_INTERVAL);
+        return;
+      }
 
       try {
         const results = await modelRef.current.predict(video);
 
         if (!active) return;
 
-        // Combine every matching class into three movement groups.
         const grouped = getGroupedPredictions(results);
 
-        console.log("Grouped predictions:", grouped);
+        const [bestMovement, bestProbability] =
+          Object.entries(grouped).reduce(
+            (best, current) =>
+              current[1] > best[1] ? current : best,
+            ["neutral", 0]
+          );
 
-        // Find the movement with the highest combined probability.
-        const highest = Object.entries(grouped).reduce(
-          (best, current) =>
-            current[1] > best[1] ? current : best,
-          ["neutral", 0]
-        );
+        const recognized =
+          bestProbability >= confidenceThresholdRef.current;
 
-        const [bestMovement, bestProbability] = highest;
-
-        const threshold = confidenceThresholdRef.current;
-
-        // Only activate a movement if it reaches the confidence threshold.
-        let action = "neutral";
-
-        if (bestProbability >= threshold) {
-          action = bestMovement;
-        }
-
-        // Display the grouped movement, not individual class names.
-        const isRecognized = bestProbability >= threshold;
-
-        setPrediction(
-          isRecognized
-            ? bestMovement.toUpperCase()
-            : "Waiting"
-        );
+        const detectedMovement = recognized
+          ? bestMovement
+          : "neutral";
 
         setConfidence(bestProbability);
+        setPrediction(
+          recognized ? bestMovement.toUpperCase() : "Waiting"
+        );
 
-        const previous = previousPredictionRef.current;
-
-        // Trigger a jump only when a new jump command is detected.
-        if (action === "jump" && previous !== "jump") {
-          setControl("jump");
+        if (detectedMovement === candidateMovement) {
+          candidateCount += 1;
         } else {
-          setControl(action);
+          candidateMovement = detectedMovement;
+          candidateCount = 1;
         }
 
-        previousPredictionRef.current = action;
+        if (
+          candidateCount >= REQUIRED_STABLE_PREDICTIONS &&
+          candidateMovement !== stableMovement
+        ) {
+          stableMovement = candidateMovement;
+          setControl(stableMovement);
+        }
       } catch (error) {
         console.error("AI prediction error:", error);
-      } finally {
-        busy = false;
+      }
+
+      if (active) {
+        timer = setTimeout(predict, PREDICTION_INTERVAL);
       }
     };
 
-    const timer = setInterval(predict, 100);
+    predict();
 
     return () => {
       active = false;
-      clearInterval(timer);
+      if (timer) clearTimeout(timer);
     };
   }, [cameraReady, modelReady, aiEnabled, setControl]);
 
@@ -311,7 +285,6 @@ export default function Home() {
   const restartGame = () => {
     setScore(0);
     setControl("neutral");
-    previousPredictionRef.current = "neutral";
     setGameStatus("playing");
     setGameKey((value) => value + 1);
   };
@@ -327,7 +300,6 @@ export default function Home() {
   const toggleAI = () => {
     setAiEnabled((value) => !value);
     setControl("neutral");
-    previousPredictionRef.current = "neutral";
     setPrediction("Waiting");
     setConfidence(0);
   };
@@ -341,9 +313,7 @@ export default function Home() {
         </a>
 
         <div className="header-status">
-          <span
-            className={`dot ${modelReady ? "active" : ""}`}
-          />
+          <span className={`dot ${modelReady ? "active" : ""}`} />
           {modelReady
             ? "AI MODEL CONNECTED"
             : "AI MODEL NOT CONNECTED"}
@@ -468,9 +438,7 @@ export default function Home() {
 
             {!cameraReady && (
               <div className="camera-placeholder">
-                <div className="camera-placeholder-icon">
-                  ◎
-                </div>
+                <div className="camera-placeholder-icon">◎</div>
                 <strong>Your camera goes here</strong>
                 <p>
                   Connect the camera to let AI see your movements.
@@ -609,9 +577,7 @@ export default function Home() {
 
         <div className="instruction-grid">
           <div className="instruction-card">
-            <div className="instruction-icon jump-icon">
-              ↑
-            </div>
+            <div className="instruction-icon jump-icon">↑</div>
             <div>
               <h3>JUMP</h3>
               <p>
@@ -623,9 +589,7 @@ export default function Home() {
           </div>
 
           <div className="instruction-card">
-            <div className="instruction-icon duck-icon">
-              ↓
-            </div>
+            <div className="instruction-icon duck-icon">↓</div>
             <div>
               <h3>DUCK</h3>
               <p>
@@ -637,9 +601,7 @@ export default function Home() {
           </div>
 
           <div className="instruction-card">
-            <div className="instruction-icon neutral-icon">
-              ●
-            </div>
+            <div className="instruction-icon neutral-icon">●</div>
             <div>
               <h3>NEUTRAL</h3>
               <p>
@@ -688,33 +650,33 @@ function Game({
     const ctx = canvas.getContext("2d");
     const ground = 285;
 
+    // Load the original Chrome Dino sprite sheet.
+    const dinoSprite = new Image();
+    dinoSprite.src = "/dino-sprite.png";
+
     const state = {
       dino: {
         x: 105,
-        y: ground - 58,
+        y: ground - 47,
         velocityY: 0,
         jumping: false,
         ducking: false,
-        animation: 0,
       },
+
       obstacles: [],
+
       clouds: [
         { x: 170, y: 65, size: 1 },
         { x: 440, y: 105, size: 0.8 },
         { x: 760, y: 55, size: 1.1 },
       ],
-      hills: [
-        { x: 80, width: 180, height: 48 },
-        { x: 380, width: 240, height: 65 },
-        { x: 740, width: 200, height: 45 },
-      ],
+
       frame: 0,
       score: 0,
       speed: 5,
       nextObstacle: 100,
       lastAction: "neutral",
       gameOver: false,
-      lastTime: 0,
       groundOffset: 0,
     };
 
@@ -722,205 +684,160 @@ function Game({
       ctx.save();
       ctx.translate(x, y);
       ctx.scale(scale, scale);
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
+
+      ctx.fillStyle = "#d5d5d5";
       ctx.beginPath();
       ctx.arc(0, 10, 15, 0, Math.PI * 2);
       ctx.arc(19, 2, 20, 0, Math.PI * 2);
       ctx.arc(40, 10, 14, 0, Math.PI * 2);
       ctx.fill();
+
       ctx.restore();
     };
 
+    // Draw the original Chrome Dino poses from its sprite sheet.
     const drawDino = () => {
       const d = state.dino;
-      const x = d.x;
-      const y =
-        d.ducking && !d.jumping
-          ? ground - 34
-          : d.y;
 
-      const runningFrame =
-        Math.floor(state.frame / 6) % 2;
+      if (!dinoSprite.complete || !dinoSprite.naturalWidth) {
+        return;
+      }
+
+      const isDucking = d.ducking && !d.jumping;
+
+      const SPRITE_X = 848;
+      const SPRITE_Y = 2;
+
+      const RUN_WIDTH = 44;
+      const RUN_HEIGHT = 47;
+
+      const DUCK_WIDTH = 59;
+      const DUCK_HEIGHT = 25;
+
+      let sourceX;
+      let sourceWidth;
+      let sourceHeight;
+      let drawX;
+      let drawY;
+      let drawWidth;
+      let drawHeight;
+
+      if (isDucking) {
+        const duckFrame = Math.floor(state.frame / 8) % 2;
+
+        // Original ducking frames.
+        sourceX = duckFrame === 0 ? 264 : 323;
+
+        sourceWidth = DUCK_WIDTH;
+        sourceHeight = DUCK_HEIGHT;
+
+        drawX = d.x - 5;
+        drawY = ground - DUCK_HEIGHT;
+        drawWidth = DUCK_WIDTH;
+        drawHeight = DUCK_HEIGHT;
+      } else {
+        if (d.jumping) {
+          // Original jumping pose.
+          sourceX = 0;
+        } else {
+          // Original running frames.
+          const runningFrame = Math.floor(state.frame / 5) % 2;
+          sourceX = runningFrame === 0 ? 88 : 132;
+        }
+
+        sourceWidth = RUN_WIDTH;
+        sourceHeight = RUN_HEIGHT;
+
+        drawX = d.x;
+        drawY = d.y;
+        drawWidth = RUN_WIDTH;
+        drawHeight = RUN_HEIGHT;
+      }
 
       ctx.save();
-      ctx.translate(x, y);
+      ctx.imageSmoothingEnabled = false;
 
-      const bodyColor = "#245a42";
-      const darkColor = "#17432f";
-      const lightColor = "#4b8b62";
-
-      if (d.ducking && !d.jumping) {
-        ctx.fillStyle = bodyColor;
-        ctx.fillRect(2, 12, 47, 22);
-        ctx.fillRect(35, 0, 27, 22);
-        ctx.fillRect(-12, 20, 18, 7);
-        ctx.fillRect(56, 10, 12, 5);
-
-        ctx.fillStyle = darkColor;
-        ctx.fillRect(10, 31, 12, 5);
-        ctx.fillRect(39, 31, 12, 5);
-
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(52, 5, 5, 5);
-        ctx.fillStyle = "#172c20";
-        ctx.fillRect(54, 6, 2, 3);
-
-        ctx.fillStyle = lightColor;
-        ctx.fillRect(24, 15, 8, 5);
-      } else {
-        ctx.fillStyle = darkColor;
-        ctx.fillRect(-12, 35, 18, 7);
-        ctx.fillRect(-20, 29, 12, 8);
-
-        ctx.fillStyle = bodyColor;
-        ctx.fillRect(3, 17, 36, 34);
-        ctx.fillRect(27, 6, 27, 29);
-
-        ctx.fillStyle = lightColor;
-        ctx.fillRect(11, 10, 7, 9);
-        ctx.fillRect(23, 8, 7, 9);
-        ctx.fillRect(35, 10, 7, 8);
-
-        ctx.fillStyle = bodyColor;
-        ctx.fillRect(40, 3, 21, 20);
-        ctx.fillRect(54, 13, 13, 9);
-
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(53, 7, 6, 6);
-        ctx.fillStyle = "#172c20";
-        ctx.fillRect(56, 8, 3, 4);
-
-        ctx.fillStyle = darkColor;
-        ctx.fillRect(64, 15, 3, 3);
-
-        ctx.fillStyle = lightColor;
-        ctx.fillRect(35, 29, 10, 5);
-        ctx.fillRect(41, 33, 5, 5);
-
-        ctx.fillStyle = darkColor;
-
-        if (d.jumping) {
-          ctx.fillRect(9, 48, 8, 12);
-          ctx.fillRect(30, 47, 8, 13);
-          ctx.fillRect(4, 58, 15, 4);
-          ctx.fillRect(28, 59, 15, 4);
-        } else if (runningFrame === 0) {
-          ctx.fillRect(9, 48, 8, 14);
-          ctx.fillRect(30, 48, 8, 9);
-          ctx.fillRect(3, 58, 15, 4);
-          ctx.fillRect(29, 54, 13, 4);
-        } else {
-          ctx.fillRect(10, 48, 8, 9);
-          ctx.fillRect(29, 48, 8, 14);
-          ctx.fillRect(6, 54, 13, 4);
-          ctx.fillRect(28, 58, 15, 4);
-        }
-      }
+      ctx.drawImage(
+        dinoSprite,
+        SPRITE_X + sourceX,
+        SPRITE_Y,
+        sourceWidth,
+        sourceHeight,
+        Math.round(drawX),
+        Math.round(drawY),
+        drawWidth,
+        drawHeight
+      );
 
       ctx.restore();
     };
 
     const drawObstacle = (obstacle) => {
+      ctx.save();
+
       if (obstacle.type === "bird") {
-        const flap = Math.floor(state.frame / 5) % 2;
+        const flap = Math.floor(state.frame / 6) % 2;
+        const x = Math.round(obstacle.x);
+        const y = Math.round(obstacle.y);
 
-        ctx.fillStyle = "#b65c42";
-        ctx.fillRect(obstacle.x, obstacle.y, 34, 15);
-        ctx.fillRect(obstacle.x + 22, obstacle.y - 7, 13, 12);
-        ctx.fillRect(obstacle.x + 30, obstacle.y - 3, 9, 4);
+        ctx.fillStyle = "#535353";
 
-        ctx.fillStyle = "#8d4938";
+        ctx.fillRect(x + 5, y + 7, 28, 8);
+        ctx.fillRect(x + 25, y + 2, 10, 9);
+        ctx.fillRect(x + 33, y + 5, 7, 4);
+        ctx.fillRect(x, y + 8, 8, 4);
 
         if (flap === 0) {
-          ctx.fillRect(
-            obstacle.x + 8,
-            obstacle.y - 10,
-            14,
-            10
-          );
+          ctx.fillRect(x + 12, y, 17, 8);
+          ctx.fillRect(x + 17, y - 5, 9, 7);
         } else {
-          ctx.fillRect(
-            obstacle.x + 8,
-            obstacle.y + 13,
-            14,
-            9
-          );
+          ctx.fillRect(x + 12, y + 13, 17, 7);
+          ctx.fillRect(x + 17, y + 18, 9, 4);
         }
 
         ctx.fillStyle = "#ffffff";
-        ctx.fillRect(
-          obstacle.x + 28,
-          obstacle.y - 4,
-          4,
-          4
-        );
-      } else {
-        ctx.fillStyle = "#3c7a4e";
-        ctx.fillRect(
-          obstacle.x + 8,
-          obstacle.y,
-          22,
-          obstacle.height
-        );
-        ctx.fillRect(
-          obstacle.x,
-          obstacle.y + 14,
-          11,
-          20
-        );
-        ctx.fillRect(
-          obstacle.x + 23,
-          obstacle.y + 22,
-          12,
-          18
-        );
+        ctx.fillRect(x + 29, y + 4, 3, 3);
 
-        ctx.fillStyle = "#559465";
-        ctx.fillRect(
-          obstacle.x + 12,
-          obstacle.y + 4,
-          5,
-          12
-        );
+        ctx.fillStyle = "#535353";
+        ctx.fillRect(x + 30, y + 5, 1, 1);
+      } else {
+        const x = Math.round(obstacle.x);
+        const y = Math.round(obstacle.y);
+
+        ctx.fillStyle = "#535353";
+
+        ctx.fillRect(x + 12, y, 12, obstacle.height);
+        ctx.fillRect(x + 4, y + 13, 9, 7);
+        ctx.fillRect(x + 4, y + 7, 6, 13);
+        ctx.fillRect(x + 23, y + 22, 9, 7);
+        ctx.fillRect(x + 26, y + 15, 6, 14);
+        ctx.fillRect(x + 15, y - 5, 6, 8);
       }
+
+      ctx.restore();
     };
 
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      ctx.fillStyle = "#eaf5ee";
+      ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      ctx.fillStyle = "#d9ebdf";
-
-      state.hills.forEach((hill) => {
-        ctx.beginPath();
-        ctx.ellipse(
-          hill.x,
-          ground - 5,
-          hill.width / 2,
-          hill.height,
-          0,
-          Math.PI,
-          0
-        );
-        ctx.fill();
+      state.clouds.forEach((cloud) => {
+        drawCloud(cloud.x, cloud.y, cloud.size);
       });
 
-      state.clouds.forEach((cloud) =>
-        drawCloud(cloud.x, cloud.y, cloud.size)
-      );
-
-      ctx.fillStyle = "#8eae98";
+      ctx.fillStyle = "#535353";
       ctx.fillRect(0, ground, canvas.width, 2);
 
-      ctx.fillStyle = "#b5cdbb";
-
-      for (let i = 0; i < 24; i++) {
+      for (let i = 0; i < 22; i++) {
         const x =
-          (i * 48 - state.groundOffset) % canvas.width;
+          ((i * 53 - state.groundOffset * 1.5) %
+            canvas.width +
+            canvas.width) %
+          canvas.width;
 
-        ctx.fillRect(x, ground + 12, 18, 2);
+        ctx.fillRect(x, ground + 10, 9, 2);
       }
 
       state.obstacles.forEach(drawObstacle);
@@ -930,11 +847,11 @@ function Game({
         statusRef.current === "ready" ||
         state.gameOver
       ) {
-        ctx.fillStyle = "rgba(234,245,238,0.78)";
+        ctx.fillStyle = "rgba(255,255,255,0.78)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         ctx.textAlign = "center";
-        ctx.fillStyle = "#245a42";
+        ctx.fillStyle = "#535353";
         ctx.font = "bold 32px Arial";
 
         ctx.fillText(
@@ -944,7 +861,7 @@ function Game({
         );
 
         ctx.font = "16px Arial";
-        ctx.fillStyle = "#547561";
+        ctx.fillStyle = "#777777";
 
         ctx.fillText(
           state.gameOver
@@ -974,14 +891,11 @@ function Game({
         return;
       }
 
-      const factor = Math.min(delta / 16.67, 2);
+      const factor = Math.min(delta / 16.67, 3);
 
       state.frame += factor;
       state.score += 0.12 * factor;
-      state.speed = Math.min(
-        11,
-        5 + state.score / 250
-      );
+      state.speed = Math.min(11, 5 + state.score / 250);
 
       state.groundOffset =
         (state.groundOffset + state.speed * factor) %
@@ -989,6 +903,7 @@ function Game({
 
       const action = controlRef.current;
 
+      // A jump is triggered once when a new jump command begins.
       if (
         action === "jump" &&
         state.lastAction !== "jump"
@@ -998,6 +913,7 @@ function Game({
 
       state.lastAction = action;
 
+      // Duck remains active while the duck command is held.
       state.dino.ducking =
         action === "duck" && !state.dino.jumping;
 
@@ -1007,13 +923,14 @@ function Game({
 
         state.dino.velocityY += 0.7 * factor;
 
-        if (state.dino.y >= ground - 58) {
-          state.dino.y = ground - 58;
+        if (state.dino.y >= ground - 47) {
+          state.dino.y = ground - 47;
           state.dino.velocityY = 0;
           state.dino.jumping = false;
         }
       }
 
+      // Move existing obstacles.
       state.obstacles.forEach((obstacle) => {
         obstacle.x -= state.speed * factor;
       });
@@ -1022,6 +939,7 @@ function Game({
         (obstacle) => obstacle.x > -70
       );
 
+      // Create new obstacles.
       state.nextObstacle -= factor;
 
       if (state.nextObstacle <= 0) {
@@ -1030,12 +948,15 @@ function Game({
 
         state.obstacles.push({
           x: canvas.width + 25,
+
+          // Birds are low enough to hit a standing dinosaur.
           y:
             type === "bird"
-              ? ground - 76
+              ? ground - 52
               : ground - 45,
-          width: type === "bird" ? 39 : 35,
-          height: type === "bird" ? 18 : 45,
+
+          width: type === "bird" ? 40 : 35,
+          height: type === "bird" ? 16 : 45,
           type,
         });
 
@@ -1043,6 +964,7 @@ function Game({
           95 + Math.random() * 65;
       }
 
+      // Move clouds.
       state.clouds.forEach((cloud) => {
         cloud.x -= 0.45 * factor;
 
@@ -1051,36 +973,23 @@ function Game({
         }
       });
 
-      state.hills.forEach((hill) => {
-        hill.x -= 0.25 * factor;
-
-        if (hill.x < -hill.width) {
-          hill.x =
-            canvas.width + hill.width / 2;
-        }
-      });
-
+      // Collision dimensions match the original sprite proportions.
       const d = state.dino;
+      const isDucking = d.ducking && !d.jumping;
 
       const player = {
-        x: d.x + 3,
-        y: d.ducking
-          ? ground - 34
-          : d.y + 8,
-        width: d.ducking ? 62 : 58,
-        height: d.ducking ? 32 : 48,
+        x: d.x + (isDucking ? 2 : 4),
+        y: isDucking ? ground - 25 : d.y + 4,
+        width: isDucking ? 55 : 40,
+        height: isDucking ? 23 : 40,
       };
 
       for (const obstacle of state.obstacles) {
         const hit =
-          player.x <
-            obstacle.x + obstacle.width - 5 &&
-          player.x + player.width >
-            obstacle.x + 4 &&
-          player.y <
-            obstacle.y + obstacle.height - 3 &&
-          player.y + player.height >
-            obstacle.y + 3;
+          player.x < obstacle.x + obstacle.width - 5 &&
+          player.x + player.width > obstacle.x + 4 &&
+          player.y < obstacle.y + obstacle.height - 3 &&
+          player.y + player.height > obstacle.y + 3;
 
         if (hit) {
           state.gameOver = true;
@@ -1115,8 +1024,7 @@ function Game({
       update(delta);
       draw();
 
-      animationFrame =
-        requestAnimationFrame(drawLoop);
+      animationFrame = requestAnimationFrame(drawLoop);
     };
 
     const handleKeyDown = (event) => {
@@ -1153,21 +1061,13 @@ function Game({
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
 
-    animationFrame =
-      requestAnimationFrame(drawLoop);
+    animationFrame = requestAnimationFrame(drawLoop);
 
     return () => {
       cancelAnimationFrame(animationFrame);
 
-      window.removeEventListener(
-        "keydown",
-        handleKeyDown
-      );
-
-      window.removeEventListener(
-        "keyup",
-        handleKeyUp
-      );
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
     };
   }, [controlRef]);
 
