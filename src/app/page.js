@@ -190,7 +190,6 @@ export default function Home() {
     }
   };
 
-  // AI prediction loop. Runs sequentially so predictions never overlap.
   
   // Fast AI prediction loop. Each confident prediction is acted on immediately.
   useEffect(() => {
