@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -40,7 +39,9 @@ function Avatar({ movement, jumping }) {
 
   return (
     <div className="avatar-scene">
-      <div className={`character-wrap ${jumping ? "jumping" : ""} ${isSitting ? "sitting" : ""}`}>
+      <div
+        className={`character-wrap ${jumping ? "jumping" : ""} ${isSitting ? "sitting" : ""}`}
+      >
         <svg
           className="character"
           viewBox="0 0 280 390"
@@ -64,8 +65,20 @@ function Avatar({ movement, jumping }) {
               <stop offset="100%" stopColor="#223454" />
             </linearGradient>
 
-            <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
-              <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#29395A" floodOpacity=".16" />
+            <filter
+              id="softShadow"
+              x="-30%"
+              y="-30%"
+              width="160%"
+              height="160%"
+            >
+              <feDropShadow
+                dx="0"
+                dy="3"
+                stdDeviation="3"
+                floodColor="#29395A"
+                floodOpacity=".16"
+              />
             </filter>
           </defs>
 
@@ -109,8 +122,18 @@ function Avatar({ movement, jumping }) {
               stroke="#293852"
               strokeWidth="4"
             />
-            <path d="M87 345 L126 345" stroke="#9A8CEB" strokeWidth="4" strokeLinecap="round" />
-            <path d="M158 346 L201 343" stroke="#9A8CEB" strokeWidth="4" strokeLinecap="round" />
+            <path
+              d="M87 345 L126 345"
+              stroke="#9A8CEB"
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
+            <path
+              d="M158 346 L201 343"
+              stroke="#9A8CEB"
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
           </g>
 
           {/* Body */}
@@ -203,8 +226,20 @@ function Avatar({ movement, jumping }) {
             />
 
             {/* Eyebrows */}
-            <path d="M106 91 Q119 84 130 91" fill="none" stroke="#51383A" strokeWidth="4" strokeLinecap="round" />
-            <path d="M151 91 Q165 84 177 91" fill="none" stroke="#51383A" strokeWidth="4" strokeLinecap="round" />
+            <path
+              d="M106 91 Q119 84 130 91"
+              fill="none"
+              stroke="#51383A"
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
+            <path
+              d="M151 91 Q165 84 177 91"
+              fill="none"
+              stroke="#51383A"
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
 
             {/* Eyes */}
             <ellipse cx="119" cy="103" rx="5" ry="7" fill="#342B34" />
@@ -213,8 +248,22 @@ function Avatar({ movement, jumping }) {
             <circle cx="166" cy="101" r="1.8" fill="white" />
 
             {/* Cheeks */}
-            <ellipse cx="103" cy="118" rx="10" ry="5" fill="#E98F91" opacity=".45" />
-            <ellipse cx="180" cy="118" rx="10" ry="5" fill="#E98F91" opacity=".45" />
+            <ellipse
+              cx="103"
+              cy="118"
+              rx="10"
+              ry="5"
+              fill="#E98F91"
+              opacity=".45"
+            />
+            <ellipse
+              cx="180"
+              cy="118"
+              rx="10"
+              ry="5"
+              fill="#E98F91"
+              opacity=".45"
+            />
 
             {/* Smile */}
             <path
@@ -380,15 +429,13 @@ export default function Home() {
       webcamRef.current.update();
 
       const predictions = await modelRef.current.predict(
-        webcamRef.current.canvas
+        webcamRef.current.canvas,
       );
 
       if (!runningRef.current) return;
 
       const best = predictions.reduce((highest, current) =>
-        current.probability > highest.probability
-          ? current
-          : highest
+        current.probability > highest.probability ? current : highest,
       );
 
       const percent = Math.round(best.probability * 100);
@@ -398,10 +445,7 @@ export default function Home() {
       const detectedMovement = getMovement(best.className);
       const threshold = confidenceRef.current / 100;
 
-      if (
-        detectedMovement &&
-        best.probability >= threshold
-      ) {
+      if (detectedMovement && best.probability >= threshold) {
         applyMovement(detectedMovement);
       }
     } catch (err) {
@@ -425,14 +469,14 @@ export default function Home() {
 
     if (!settings?.modelUrl) {
       setError(
-        "No AI model URL has been saved. Open Settings, enter your Teachable Machine URL, test it, and save it first."
+        "No AI model URL has been saved. Open Settings, enter your Teachable Machine URL, test it, and save it first.",
       );
       return;
     }
 
     if (!settings.classes?.length) {
       setError(
-        "Your saved model has no class information. Please test and save your model again in Settings."
+        "Your saved model has no class information. Please test and save your model again in Settings.",
       );
       return;
     }
@@ -445,7 +489,7 @@ export default function Home() {
       // Load the saved model.
       const loadedModel = await tmImage.load(
         `${cleanUrl}/model.json`,
-        `${cleanUrl}/metadata.json`
+        `${cleanUrl}/metadata.json`,
       );
 
       // Confirm that the model still has the saved classes.
@@ -457,15 +501,17 @@ export default function Home() {
 
       const requiredMovements = ["JUMP", "DUCK", "NEUTRAL"];
 
-      const missing = requiredMovements.filter((required) =>
-        !actualClasses.some(
-          (label) => getMovement(label) === (required === "DUCK" ? "SIT" : required)
-        )
+      const missing = requiredMovements.filter(
+        (required) =>
+          !actualClasses.some(
+            (label) =>
+              getMovement(label) === (required === "DUCK" ? "SIT" : required),
+          ),
       );
 
       if (missing.length > 0) {
         throw new Error(
-          `Your model is missing these movement groups: ${missing.join(", ")}. Check your Settings page.`
+          `Your model is missing these movement groups: ${missing.join(", ")}. Check your Settings page.`,
         );
       }
 
@@ -499,7 +545,7 @@ export default function Home() {
 
       setError(
         err.message ||
-          "Could not load the AI model or start the camera. Check your settings and camera permission."
+          "Could not load the AI model or start the camera. Check your settings and camera permission.",
       );
 
       stopCamera();
@@ -770,7 +816,7 @@ export default function Home() {
           position: absolute;
           color: #b2a2e8;
           font-size: 24px;
-          opacity: .7;
+          opacity: 0.7;
         }
 
         .sparkle.one {
@@ -809,7 +855,7 @@ export default function Home() {
           align-items: center;
           justify-content: center;
           transform-origin: center bottom;
-          transition: transform .25s ease;
+          transition: transform 0.25s ease;
           z-index: 2;
         }
 
@@ -827,7 +873,7 @@ export default function Home() {
           background: #d4c9ed;
           border-radius: 50%;
           filter: blur(2px);
-          opacity: .75;
+          opacity: 0.75;
         }
 
         .avatar-glow {
@@ -839,19 +885,29 @@ export default function Home() {
         }
 
         .character-wrap.jumping {
-          animation: avatarJump .75s cubic-bezier(.25,.8,.35,1);
+          animation: avatarJump 0.75s cubic-bezier(0.25, 0.8, 0.35, 1);
         }
 
         @keyframes avatarJump {
-          0% { transform: translateY(0) rotate(0); }
-          28% { transform: translateY(-155px) rotate(-5deg); }
-          48% { transform: translateY(-165px) rotate(3deg); }
-          70% { transform: translateY(-120px) rotate(-2deg); }
-          100% { transform: translateY(0) rotate(0); }
+          0% {
+            transform: translateY(0) rotate(0);
+          }
+          28% {
+            transform: translateY(-155px) rotate(-5deg);
+          }
+          48% {
+            transform: translateY(-165px) rotate(3deg);
+          }
+          70% {
+            transform: translateY(-120px) rotate(-2deg);
+          }
+          100% {
+            transform: translateY(0) rotate(0);
+          }
         }
 
         .character-wrap.sitting {
-          transform: translateY(47px) scale(.92,.84);
+          transform: translateY(47px) scale(0.92, 0.84);
         }
 
         .character-wrap.sitting .avatar-legs {
@@ -878,7 +934,7 @@ export default function Home() {
         .avatar-body,
         .left-arm,
         .right-arm {
-          transition: transform .3s ease;
+          transition: transform 0.3s ease;
         }
 
         .movement-pill {
@@ -928,7 +984,9 @@ export default function Home() {
           font-size: 13px;
           font-weight: 800;
           cursor: pointer;
-          transition: transform .15s, opacity .15s;
+          transition:
+            transform 0.15s,
+            opacity 0.15s;
         }
 
         .primary-button {
@@ -948,7 +1006,7 @@ export default function Home() {
         }
 
         .primary-button:disabled {
-          opacity: .6;
+          opacity: 0.6;
           cursor: wait;
         }
 
@@ -1040,7 +1098,7 @@ export default function Home() {
           height: 100%;
           border-radius: inherit;
           background: linear-gradient(90deg, #b19ce9, #745dcf);
-          transition: width .15s ease;
+          transition: width 0.15s ease;
         }
 
         .confidence-caption {
@@ -1168,7 +1226,7 @@ export default function Home() {
           }
 
           .avatar-scene {
-            transform: scale(.9);
+            transform: scale(0.9);
           }
 
           .playground-controls {
@@ -1196,7 +1254,9 @@ export default function Home() {
 
           <div className="top-actions">
             <div className="connection-status">
-              <span className={`connection-dot ${cameraStarted ? "connected" : ""}`} />
+              <span
+                className={`connection-dot ${cameraStarted ? "connected" : ""}`}
+              />
               {cameraStarted ? "AI CONNECTED" : "AI NOT CONNECTED"}
             </div>
 
@@ -1216,8 +1276,8 @@ export default function Home() {
           <h1>Move your avatar with AI.</h1>
 
           <p>
-            Show your trained gestures to the camera and watch your avatar
-            jump, sit, and stand.
+            Show your trained gestures to the camera and watch your avatar jump,
+            sit, and stand.
           </p>
         </section>
 
@@ -1303,9 +1363,7 @@ export default function Home() {
 
               <div className="confidence-caption">
                 <span>0%</span>
-                <span>
-                  Required: {settings?.confidence ?? 85}%
-                </span>
+                <span>Required: {settings?.confidence ?? 85}%</span>
                 <span>100%</span>
               </div>
 
@@ -1318,15 +1376,15 @@ export default function Home() {
 
               {settingsLoaded && !settings?.modelUrl && (
                 <p className="settings-reminder">
-                  No saved model found. Visit Settings to connect your
-                  Teachable Machine model.
+                  No saved model found. Visit Settings to connect your Teachable
+                  Machine model.
                 </p>
               )}
 
               {settings?.modelUrl && (
                 <p className="settings-reminder">
-                  Saved AI model detected. Your saved confidence setting
-                  will be used automatically.
+                  Saved AI model detected. Your saved confidence setting will be
+                  used automatically.
                 </p>
               )}
             </section>
