@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -19,9 +18,9 @@ function getMovementGroup(label) {
     .trim()
     .replace(/\s+/g, "");
 
-  if (normalized.startsWith("jump")) return "jump";
-  if (normalized.startsWith("duck")) return "duck";
-  if (normalized.startsWith("neutral")) return "neutral";
+  if (/^jump\d*$/.test(normalized)) return "jump";
+  if (/^duck\d*$/.test(normalized)) return "duck";
+  if (/^neutral\d*$/.test(normalized)) return "neutral";
 
   return null;
 }
@@ -166,6 +165,7 @@ export default function Home() {
           video: {
             facingMode: "user",
             width: 320,
+            height: 240,
             frameRate: { ideal: 15, max: 20 },
           },
           audio: false,
@@ -188,20 +188,18 @@ export default function Home() {
       );
     }
   };
-
-  
-  // Fast AI prediction loop. Each confident prediction is acted on immediately.
- 
-  // AI prediction loop: prioritize smooth game performance.
+    // AI prediction loop: one confident movement changes the game command immediately.
+  // Predictions are sequential, so a slow prediction can never overlap another one.
   useEffect(() => {
     if (!cameraReady || !modelReady || !aiEnabled) return;
 
     let active = true;
     let timer = null;
     let lastUIUpdate = 0;
+    let lastSentMovement = controlRef.current;
 
     const PREDICTION_INTERVAL = 150;
-    const UI_UPDATE_INTERVAL = 250;
+    const UI_UPDATE_INTERVAL = 200;
 
     const predict = async () => {
       if (!active) return;
@@ -215,9 +213,9 @@ export default function Home() {
 
       try {
         const results = await modelRef.current.predict(video);
-
         if (!active) return;
 
+        // Combine JUMP1/JUMP2/... into one JUMP probability, etc.
         const grouped = getGroupedPredictions(results);
 
         const [bestMovement, bestProbability] =
@@ -230,21 +228,17 @@ export default function Home() {
         const recognized =
           bestProbability >= confidenceThresholdRef.current;
 
-        // Send the command immediately, but only when it changes.
-        if (
-          recognized &&
-          controlRef.current !== bestMovement
-        ) {
-          setControl(bestMovement);
+        // Ignore uncertain frames. In particular, NEVER turn uncertainty
+        // into NEUTRAL, because that would release a held DUCK command.
+        // Numbered classes within the same movement do not retrigger it.
+        if (recognized && bestMovement !== lastSentMovement) {
+          lastSentMovement = bestMovement;
+          controlRef.current = bestMovement;
         }
 
-        // Update the visible prediction less frequently to
-        // avoid unnecessary React rendering.
         const now = performance.now();
-
         if (now - lastUIUpdate >= UI_UPDATE_INTERVAL) {
           lastUIUpdate = now;
-
           setConfidence(bestProbability);
           setPrediction(
             recognized ? bestMovement.toUpperCase() : "Waiting"
@@ -265,7 +259,7 @@ export default function Home() {
       active = false;
       if (timer) clearTimeout(timer);
     };
-  }, [cameraReady, modelReady, aiEnabled, setControl]);
+  }, [cameraReady, modelReady, aiEnabled]);
 
   // Stop the camera when the page is closed.
   useEffect(() => {
@@ -502,6 +496,7 @@ export default function Home() {
               />
             </div>
           </div>
+                    </div>
 
           <div className="movement-list">
             <div className="movement-list-heading">
@@ -674,6 +669,7 @@ function Game({
       lastAction: "neutral",
       gameOver: false,
       groundOffset: 0,
+      lastDisplayedScore: -1,
     };
 
     const drawCloud = (x, y, scale) => {
@@ -849,8 +845,7 @@ function Game({
         ctx.textAlign = "center";
         ctx.fillStyle = "#535353";
         ctx.font = "bold 32px Arial";
-
-        ctx.fillText(
+                ctx.fillText(
           state.gameOver ? "GAME OVER!" : "READY TO RUN?",
           canvas.width / 2,
           145
@@ -899,19 +894,22 @@ function Game({
 
       const action = controlRef.current;
 
-      // A jump is triggered once when a new jump command begins.
-      if (
-        action === "jump" &&
-        state.lastAction !== "jump"
-      ) {
+      // JUMP: start once when the command changes to jump.
+      // Gravity brings the dinosaur back down automatically.
+      if (action === "jump" && state.lastAction !== "jump") {
         jump();
       }
 
       state.lastAction = action;
 
-      // Duck remains active while the duck command is held.
-      state.dino.ducking =
-        action === "duck" && !state.dino.jumping;
+      // DUCK stays active until a confident JUMP or NEUTRAL arrives.
+      if (action === "jump") {
+        state.dino.ducking = false;
+      } else if (action === "duck" && !state.dino.jumping) {
+        state.dino.ducking = true;
+      } else if (action === "neutral") {
+        state.dino.ducking = false;
+      }
 
       if (state.dino.jumping) {
         state.dino.y +=
@@ -1001,9 +999,13 @@ function Game({
         }
       }
 
-      scoreCallbackRef.current(
-        Math.floor(state.score)
-      );
+      // Only update React when the visible integer score changes.
+      // Updating React on every animation frame can make the game stutter.
+      const visibleScore = Math.floor(state.score);
+      if (visibleScore !== state.lastDisplayedScore) {
+        state.lastDisplayedScore = visibleScore;
+        scoreCallbackRef.current(visibleScore);
+      }
     };
 
     let animationFrame;
