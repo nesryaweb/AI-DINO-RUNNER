@@ -26,17 +26,14 @@ function normalizeLabel(label) {
 
 function getMovement(label) {
   const normalized = normalizeLabel(label);
-
   if (/^JUMP/.test(normalized)) return "JUMP";
   if (/^DUCK/.test(normalized)) return "SIT";
   if (/^NEUTRAL/.test(normalized)) return "NEUTRAL";
-
   return null;
 }
 
 function Avatar({ movement, jumping }) {
   const isSitting = movement === "SIT";
-
   return (
     <div className="avatar-scene">
       <div
@@ -56,33 +53,27 @@ function Avatar({ movement, jumping }) {
               <stop offset="0%" stopColor="#FFE0C5" />
               <stop offset="100%" stopColor="#EBA982" />
             </linearGradient>
-
             <linearGradient id="avatarHair" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0%" stopColor="#49313A" />
               <stop offset="55%" stopColor="#2D202B" />
               <stop offset="100%" stopColor="#201923" />
             </linearGradient>
-
             <linearGradient id="avatarTop" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0%" stopColor="#B69AF4" />
               <stop offset="100%" stopColor="#785BD0" />
             </linearGradient>
-
             <linearGradient id="avatarSleeves" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0%" stopColor="#A88BEA" />
               <stop offset="100%" stopColor="#6D54C0" />
             </linearGradient>
-
             <linearGradient id="avatarJeans" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0%" stopColor="#526D9B" />
               <stop offset="100%" stopColor="#30476F" />
             </linearGradient>
-
             <linearGradient id="avatarShoes" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#FFFFFF" />
               <stop offset="100%" stopColor="#E8E4F5" />
             </linearGradient>
-
             <filter
               id="avatarShadow"
               x="-40%"
@@ -106,7 +97,6 @@ function Avatar({ movement, jumping }) {
                L214 218 Q207 253 185 263 L89 249 Q67 225 72 174 Z"
             fill="url(#avatarHair)"
           />
-
           <path
             d="M88 126 Q66 170 83 233 M207 117 Q231 167 207 236"
             fill="none"
@@ -130,42 +120,36 @@ function Avatar({ movement, jumping }) {
               stroke="#293D61"
               strokeWidth="3"
             />
-
             <path
               d="M151 254 L192 254 L202 329 Q205 345 190 350 L166 352 Q153 350 153 335 Z"
               fill="url(#avatarJeans)"
               stroke="#293D61"
               strokeWidth="3"
             />
-
             <path
               d="M101 320 L141 320 M155 320 L198 320"
               stroke="#7890B6"
               strokeWidth="3"
               opacity=".7"
             />
-
             <path
               d="M100 337 Q82 335 76 350 Q72 364 91 367 L130 367 Q145 365 139 351 L130 339 Z"
               fill="url(#avatarShoes)"
               stroke="#394766"
               strokeWidth="3"
             />
-
             <path
               d="M160 339 Q148 347 154 360 Q159 370 176 369 L211 365 Q224 361 214 348 Q207 337 194 339 Z"
               fill="url(#avatarShoes)"
               stroke="#394766"
               strokeWidth="3"
             />
-
             <path
               d="M84 355 L132 355 M164 357 L211 354"
               stroke="#A78CE8"
               strokeWidth="4"
               strokeLinecap="round"
             />
-
             <path
               d="M103 345 L121 350 M178 347 L194 344"
               stroke="#8B78C9"
@@ -184,7 +168,6 @@ function Avatar({ movement, jumping }) {
                 strokeWidth="3"
                 strokeLinejoin="round"
               />
-
               <path
                 d="M57 237 Q47 247 55 258 Q65 269 78 255 L85 243"
                 fill="url(#avatarSkin)"
@@ -192,7 +175,6 @@ function Avatar({ movement, jumping }) {
                 strokeWidth="2.5"
               />
             </g>
-
             <g className="right-arm">
               <path
                 d="M195 171 Q212 164 221 181 L245 229 Q251 244 239 252 Q226 260 216 243 L187 199"
@@ -201,7 +183,6 @@ function Avatar({ movement, jumping }) {
                 strokeWidth="3"
                 strokeLinejoin="round"
               />
-
               <path
                 d="M243 237 Q253 247 245 258 Q235 269 222 255 L215 243"
                 fill="url(#avatarSkin)"
@@ -220,19 +201,16 @@ function Avatar({ movement, jumping }) {
               stroke="#644BAE"
               strokeWidth="3.5"
             />
-
             <path
               d="M119 151 Q150 181 181 151 L174 142 Q150 158 126 142 Z"
               fill="#E9DFFF"
             />
-
             <path
               d="M150 176 L150 251"
               stroke="#D5C5FF"
               strokeWidth="2.5"
               opacity=".65"
             />
-
             <path
               d="M128 190 Q150 202 172 190"
               fill="none"
@@ -240,10 +218,8 @@ function Avatar({ movement, jumping }) {
               strokeWidth="2"
               opacity=".7"
             />
-
             <circle cx="150" cy="210" r="3" fill="#F8F2FF" />
             <circle cx="150" cy="226" r="3" fill="#F8F2FF" />
-
             <path
               d="M108 247 Q150 255 192 247"
               fill="none"
@@ -257,7 +233,6 @@ function Avatar({ movement, jumping }) {
           <g filter="url(#avatarShadow)">
             <ellipse cx="83" cy="108" rx="12" ry="18" fill="#EFB38F" />
             <ellipse cx="217" cy="108" rx="12" ry="18" fill="#EFB38F" />
-
             <path
               d="M91 77 Q91 37 150 36 Q209 37 209 80
                  L203 128 Q195 162 150 165 Q105 162 97 128 Z"
@@ -273,7 +248,6 @@ function Avatar({ movement, jumping }) {
                  Q163 91 143 76 Q122 96 104 83 L94 112 Z"
               fill="url(#avatarHair)"
             />
-
             <path
               d="M102 49 Q119 27 141 31 M153 27 Q184 25 199 51"
               fill="none"
@@ -295,10 +269,8 @@ function Avatar({ movement, jumping }) {
             {/* Eyes */}
             <ellipse cx="126" cy="111" rx="7" ry="9" fill="#332A35" />
             <ellipse cx="176" cy="111" rx="7" ry="9" fill="#332A35" />
-
             <circle cx="128" cy="108" r="2.5" fill="#FFFFFF" />
             <circle cx="178" cy="108" r="2.5" fill="#FFFFFF" />
-
             <path
               d="M116 122 Q126 126 136 122 M166 122 Q176 126 186 122"
               fill="none"
@@ -316,7 +288,6 @@ function Avatar({ movement, jumping }) {
               fill="#E98D9A"
               opacity=".38"
             />
-
             <ellipse
               cx="192"
               cy="132"
@@ -325,7 +296,6 @@ function Avatar({ movement, jumping }) {
               fill="#E98D9A"
               opacity=".38"
             />
-
             <path
               d="M139 139 Q150 151 162 139"
               fill="none"
@@ -342,7 +312,6 @@ function Avatar({ movement, jumping }) {
               strokeWidth="13"
               strokeLinecap="round"
             />
-
             <path
               d="M209 91 Q222 145 208 194 Q201 215 192 221"
               fill="none"
@@ -358,7 +327,6 @@ function Avatar({ movement, jumping }) {
               stroke="#D98EAF"
               strokeWidth="2"
             />
-
             <circle cx="207" cy="49" r="4" fill="#FFF4FA" />
 
             {/* Earrings */}
@@ -367,7 +335,6 @@ function Avatar({ movement, jumping }) {
           </g>
         </svg>
       </div>
-
       <div className="avatar-ground" />
       <div className="avatar-glow" />
     </div>
@@ -387,8 +354,8 @@ export default function Home() {
   const [cameraReady, setCameraReady] = useState(false);
   const [modelReady, setModelReady] = useState(false);
 
-  const cameraContainerRef = useRef(null);
-  const webcamRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
   const modelRef = useRef(null);
   const runningRef = useRef(false);
   const movementRef = useRef("NEUTRAL");
@@ -469,18 +436,15 @@ export default function Home() {
       jumpTimerRef.current = null;
     }
 
-    if (webcamRef.current) {
-      try {
-        webcamRef.current.stop();
-      } catch (err) {
-        console.warn("Camera stop:", err);
-      }
-
-      webcamRef.current = null;
+    // Stop every track in the active camera stream.
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     }
 
-    if (cameraContainerRef.current) {
-      cameraContainerRef.current.innerHTML = "";
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.srcObject = null;
     }
 
     jumpingRef.current = false;
@@ -499,45 +463,36 @@ export default function Home() {
     if (
       !runningRef.current ||
       !modelRef.current ||
-      !webcamRef.current ||
+      !videoRef.current ||
+      videoRef.current.readyState < 2 ||
       predictionBusyRef.current
     ) {
       if (runningRef.current) {
         predictionFrameRef.current = requestAnimationFrame(predictionLoop);
       }
-
       return;
     }
 
     predictionBusyRef.current = true;
 
     try {
-      webcamRef.current.update();
-
-      const predictions = await modelRef.current.predict(
-        webcamRef.current.canvas
-      );
+      // Predict directly from the live video element.
+      const predictions = await modelRef.current.predict(videoRef.current);
 
       if (!runningRef.current) return;
 
       const best = predictions.reduce((highest, current) =>
-        current.probability > highest.probability
-          ? current
-          : highest
+        current.probability > highest.probability ? current : highest
       );
 
       const percent = Math.round(best.probability * 100);
-
       setPrediction(best.className);
       setConfidence(percent);
 
       const detectedMovement = getMovement(best.className);
       const threshold = confidenceRef.current / 100;
 
-      if (
-        detectedMovement &&
-        best.probability >= threshold
-      ) {
+      if (detectedMovement && best.probability >= threshold) {
         applyMovement(detectedMovement);
       }
     } catch (err) {
@@ -573,12 +528,20 @@ export default function Home() {
       return;
     }
 
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError(
+        "Your browser does not support camera access. Open this website in a supported browser using localhost or HTTPS."
+      );
+      return;
+    }
+
     const cleanUrl = settings.modelUrl.trim().replace(/\/+$/, "");
 
     setLoading(true);
+    setModelReady(false);
 
     try {
-      // Load the saved model.
+      // Load the saved Teachable Machine model.
       const loadedModel = await tmImage.load(
         `${cleanUrl}/model.json`,
         `${cleanUrl}/metadata.json`
@@ -595,30 +558,97 @@ export default function Home() {
 
       const missing = requiredMovements.filter((required) =>
         !actualClasses.some(
-          (label) => getMovement(label) === (required === "DUCK" ? "SIT" : required)
+          (label) =>
+            getMovement(label) ===
+            (required === "DUCK" ? "SIT" : required)
         )
       );
 
       if (missing.length > 0) {
         throw new Error(
-          `Your model is missing these movement groups: ${missing.join(", ")}. Check your Settings page.`
+          `Your model is missing these movement groups: ${missing.join(
+            ", "
+          )}. Check your Settings page.`
         );
       }
 
       modelRef.current = loadedModel;
       setModelReady(true);
 
-      // Start webcam.
-      const webcam = new tmImage.Webcam(480, 360, true);
+      // Request temporary access first so the browser reveals camera names.
+      const permissionStream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false,
+      });
 
-      await webcam.setup();
-      await webcam.play();
+      permissionStream.getTracks().forEach((track) => track.stop());
 
-      webcamRef.current = webcam;
+      // Find DroidCam by its device label.
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(
+        (device) => device.kind === "videoinput"
+      );
 
-      if (cameraContainerRef.current) {
-        cameraContainerRef.current.innerHTML = "";
-        cameraContainerRef.current.appendChild(webcam.canvas);
+      console.log(
+        "Available cameras:",
+        videoDevices.map((device) => ({
+          label: device.label,
+          deviceId: device.deviceId,
+        }))
+      );
+
+      if (!videoDevices.length) {
+        throw new Error(
+          "No camera was found. Make sure DroidCam is running and connected."
+        );
+      }
+
+      const droidCam = videoDevices.find((device) =>
+        device.label.toLowerCase().includes("droidcam")
+      );
+
+      // Use DroidCam when found; otherwise use the first available camera.
+      const selectedCamera = droidCam || videoDevices[0];
+
+      console.log("Selected camera:", selectedCamera.label);
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          deviceId: { exact: selectedCamera.deviceId },
+          width: { ideal: 480 },
+          height: { ideal: 360 },
+        },
+        audio: false,
+      });
+
+      streamRef.current = stream;
+
+      if (!videoRef.current) {
+        throw new Error("The camera preview element could not be found.");
+      }
+
+      videoRef.current.srcObject = stream;
+      videoRef.current.muted = true;
+      videoRef.current.playsInline = true;
+
+      await videoRef.current.play();
+
+      // Wait until the video has actual dimensions before starting predictions.
+      if (
+        videoRef.current.videoWidth === 0 ||
+        videoRef.current.videoHeight === 0
+      ) {
+        await new Promise((resolve, reject) => {
+          const video = videoRef.current;
+          const timeout = setTimeout(() => {
+            reject(new Error("The camera opened but no video frames arrived."));
+          }, 10000);
+
+          video.onloadedmetadata = () => {
+            clearTimeout(timeout);
+            resolve();
+          };
+        });
       }
 
       runningRef.current = true;
@@ -636,7 +666,7 @@ export default function Home() {
 
       setError(
         err.message ||
-          "Could not load the AI model or start the camera. Check your settings and camera permission."
+          "Could not load the AI model or start the camera. Check your settings and camera connection."
       );
 
       stopCamera();
@@ -646,15 +676,16 @@ export default function Home() {
   };
 
   const resetAvatar = () => {
-    movementRef.current = "NEUTRAL";
-    jumpingRef.current = false;
-
     if (jumpTimerRef.current) {
       clearTimeout(jumpTimerRef.current);
+      jumpTimerRef.current = null;
     }
 
-    setMovement("NEUTRAL");
+    jumpingRef.current = false;
+    movementRef.current = "NEUTRAL";
+
     setJumping(false);
+    setMovement("NEUTRAL");
   };
 
   useEffect(() => {
@@ -669,18 +700,14 @@ export default function Home() {
         clearTimeout(jumpTimerRef.current);
       }
 
-      if (webcamRef.current) {
-        try {
-          webcamRef.current.stop();
-        } catch (err) {
-          console.warn(err);
-        }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
   }, []);
 
   return (
-    <main className="motion-page">
+    <main className="page">
       <style jsx global>{`
         * {
           box-sizing: border-box;
@@ -688,8 +715,8 @@ export default function Home() {
 
         body {
           margin: 0;
-          background: #f7f6fc;
-          color: #29263b;
+          background: #f8f6fc;
+          color: #30283e;
           font-family: Arial, Helvetica, sans-serif;
         }
 
@@ -697,257 +724,257 @@ export default function Home() {
           font: inherit;
         }
 
-        .motion-page {
+        .page {
           min-height: 100vh;
-          padding: 25px;
+          padding: 30px 20px;
           background:
-            radial-gradient(circle at 10% 10%, #f0eaff 0, transparent 30%),
-            radial-gradient(circle at 90% 80%, #eaf1ff 0, transparent 32%),
-            #f8f7fc;
+            radial-gradient(circle at 10% 10%, #eee7ff 0, transparent 30%),
+            radial-gradient(circle at 90% 90%, #f9e9f1 0, transparent 30%),
+            #f8f6fc;
         }
 
-        .motion-container {
-          max-width: 1320px;
-          margin: auto;
+        .app-container {
+          width: min(1180px, 100%);
+          margin: 0 auto;
         }
 
         .topbar {
           display: flex;
-          justify-content: space-between;
           align-items: center;
-          gap: 18px;
-          margin-bottom: 25px;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 48px;
         }
 
         .brand {
           display: flex;
           align-items: center;
           gap: 12px;
-          text-decoration: none;
-          color: #29263b;
+          font-size: 20px;
+          font-weight: 800;
+          letter-spacing: -0.5px;
         }
 
-        .brand-mark {
-          width: 47px;
-          height: 47px;
+        .brand-icon {
           display: grid;
           place-items: center;
+          width: 42px;
+          height: 42px;
+          border-radius: 14px;
           color: white;
-          background: linear-gradient(145deg, #9a7de8, #6653c7);
-          border-radius: 15px;
-          box-shadow: 0 7px 18px #7862d333;
+          background: linear-gradient(135deg, #a98ae9, #785bd0);
+          box-shadow: 0 7px 18px #9b80dc44;
         }
 
-        .brand-title {
-          font-size: 19px;
-          font-weight: 850;
-          letter-spacing: 1.2px;
-        }
-
-        .brand-subtitle {
-          font-size: 11px;
-          color: #9993ac;
-          margin-top: 4px;
-          letter-spacing: 1.3px;
-        }
-
-        .top-actions {
+        .topbar-right {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 18px;
         }
 
         .connection-status {
           display: flex;
           align-items: center;
           gap: 8px;
-          background: white;
-          border: 1px solid #ebe8f3;
-          border-radius: 30px;
-          padding: 10px 14px;
-          color: #706b80;
-          font-size: 12px;
-          font-weight: 700;
+          color: #81788f;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 1px;
         }
 
         .connection-dot {
-          width: 9px;
-          height: 9px;
+          width: 8px;
+          height: 8px;
           border-radius: 50%;
-          background: #b7b4c2;
+          background: #c5bdcf;
         }
 
         .connection-dot.connected {
-          background: #36b77a;
-          box-shadow: 0 0 0 4px #36b77a20;
+          background: #45bd88;
+          box-shadow: 0 0 0 4px #45bd8822;
         }
 
         .settings-link {
-          display: flex;
+          display: inline-flex;
           align-items: center;
           gap: 8px;
-          color: #6c5ac4;
-          background: white;
-          border: 1px solid #e9e4f5;
+          padding: 11px 16px;
+          border: 1px solid #e9e2f2;
           border-radius: 12px;
-          padding: 11px 14px;
+          background: white;
+          color: #66548c;
+          text-decoration: none;
           font-size: 13px;
           font-weight: 700;
-          text-decoration: none;
+          transition: 0.2s;
+        }
+
+        .settings-link:hover {
+          border-color: #b9a4e8;
+          transform: translateY(-1px);
         }
 
         .intro {
-          margin-bottom: 22px;
+          margin-bottom: 32px;
         }
 
         .eyebrow {
           display: inline-flex;
           align-items: center;
-          gap: 7px;
-          color: #806bd0;
+          gap: 8px;
+          margin-bottom: 13px;
+          color: #9274d0;
           font-size: 11px;
           font-weight: 800;
-          letter-spacing: 2px;
-          margin-bottom: 10px;
+          letter-spacing: 1.5px;
         }
 
         .intro h1 {
-          font-size: clamp(25px, 4vw, 34px);
-          margin: 0;
-          letter-spacing: -1px;
+          margin: 0 0 12px;
+          color: #30283e;
+          font-size: clamp(32px, 5vw, 48px);
+          font-weight: 850;
+          letter-spacing: -2px;
         }
 
         .intro p {
-          margin: 8px 0 0;
-          color: #89849c;
-          font-size: 14px;
-          line-height: 1.6;
+          max-width: 620px;
+          margin: 0;
+          color: #82798e;
+          font-size: 15px;
+          line-height: 1.7;
         }
 
         .main-layout {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) 340px;
-          gap: 20px;
+          grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.8fr);
+          gap: 22px;
           align-items: start;
         }
 
         .playground,
         .side-panel {
-          background: white;
-          border: 1px solid #ebe8f3;
-          border-radius: 21px;
-          box-shadow: 0 8px 30px #51437a08;
-          overflow: hidden;
+          border: 1px solid #ece6f4;
+          border-radius: 22px;
+          background: #fff;
+          box-shadow: 0 12px 35px #47365d0b;
+        }
+
+        .playground {
+          padding: 24px;
         }
 
         .playground-heading {
-          padding: 20px 23px;
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 12px;
-          border-bottom: 1px solid #f0edf6;
+          margin-bottom: 20px;
         }
 
         .playground-heading h2 {
           margin: 0;
-          font-size: 16px;
+          color: #382d4a;
+          font-size: 19px;
+          font-weight: 800;
         }
 
         .playground-heading span {
-          color: #aaa5b7;
-          font-size: 11px;
+          color: #a49aad;
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: 1.2px;
         }
 
         .arena {
-          min-height: 520px;
           position: relative;
           display: flex;
-          justify-content: center;
+          min-height: 490px;
           align-items: center;
+          justify-content: center;
           overflow: hidden;
+          border: 1px solid #e8e0f5;
+          border-radius: 18px;
           background:
-            radial-gradient(ellipse at 50% 72%, #e7e1fa 0, transparent 37%),
-            linear-gradient(180deg, #fbfaff, #f0edfc);
-        }
-
-        .arena::before,
-        .arena::after {
-          content: "";
-          position: absolute;
-          border: 1px solid #e7e1f6;
-          border-radius: 50%;
-          pointer-events: none;
+            radial-gradient(ellipse at 50% 70%, #e8defb 0, transparent 43%),
+            linear-gradient(145deg, #fbf9ff, #f0eafb);
         }
 
         .arena::before {
-          width: 440px;
-          height: 440px;
-          top: -300px;
-        }
-
-        .arena::after {
-          width: 600px;
-          height: 600px;
-          top: -380px;
+          position: absolute;
+          inset: 0;
+          background-image: radial-gradient(#b9a6df 1px, transparent 1px);
+          background-size: 22px 22px;
+          content: "";
+          opacity: 0.22;
         }
 
         .arena-caption {
           position: absolute;
-          top: 22px;
-          left: 24px;
-          z-index: 2;
-          font-size: 10px;
-          color: #a19bb2;
-          letter-spacing: 2px;
+          top: 20px;
+          left: 22px;
+          color: #a393bd;
+          font-size: 9px;
           font-weight: 800;
+          letter-spacing: 1.5px;
         }
 
         .sparkle {
           position: absolute;
-          color: #b2a2e8;
-          font-size: 24px;
-          opacity: .7;
+          z-index: 1;
+          color: #b99ce9;
+          animation: sparkle 2.5s ease-in-out infinite;
         }
 
         .sparkle.one {
           top: 23%;
-          left: 23%;
+          left: 18%;
+          font-size: 22px;
         }
 
         .sparkle.two {
-          top: 34%;
-          right: 22%;
-          font-size: 17px;
+          top: 39%;
+          right: 17%;
+          font-size: 28px;
+          animation-delay: 0.7s;
         }
 
         .sparkle.three {
-          bottom: 25%;
-          left: 28%;
-          font-size: 16px;
+          right: 24%;
+          bottom: 20%;
+          font-size: 18px;
+          animation-delay: 1.2s;
+        }
+
+        @keyframes sparkle {
+          0%,
+          100% {
+            opacity: 0.45;
+            transform: scale(0.8) rotate(0deg);
+          }
+          50% {
+            opacity: 1;
+            transform: scale(1.2) rotate(25deg);
+          }
         }
 
         .avatar-scene {
           position: relative;
           z-index: 2;
-          width: 330px;
-          height: 420px;
           display: flex;
-          justify-content: center;
+          width: 100%;
+          height: 430px;
           align-items: center;
+          justify-content: center;
         }
 
         .character-wrap {
-          position: absolute;
-          width: 280px;
-          height: 390px;
-          bottom: 16px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transform-origin: center bottom;
-          transition: transform .25s ease;
+          position: relative;
           z-index: 2;
+          width: 275px;
+          height: 390px;
+          transform-origin: center bottom;
+          transition: transform 0.25s ease;
         }
 
         .character {
@@ -956,404 +983,373 @@ export default function Home() {
           overflow: visible;
         }
 
-        .avatar-ground {
-          position: absolute;
-          width: 230px;
-          height: 26px;
-          bottom: 18px;
-          background: #d4c9ed;
-          border-radius: 50%;
-          filter: blur(2px);
-          opacity: .75;
-        }
-
-        .avatar-glow {
-          position: absolute;
-          width: 280px;
-          height: 130px;
-          bottom: -10px;
-          background: radial-gradient(ellipse, #bca9eb30, transparent 70%);
-        }
-
         .character-wrap.jumping {
-          animation: avatarJump .75s cubic-bezier(.25,.8,.35,1);
+          animation: avatarJump 0.75s ease;
         }
 
         @keyframes avatarJump {
           0% {
             transform: translateY(0) rotate(0);
           }
-
-          28% {
-            transform: translateY(-155px) rotate(-5deg);
+          35% {
+            transform: translateY(-115px) rotate(-4deg);
           }
-
-          48% {
-            transform: translateY(-165px) rotate(3deg);
+          65% {
+            transform: translateY(-115px) rotate(4deg);
           }
-
-          70% {
-            transform: translateY(-120px) rotate(-2deg);
-          }
-
           100% {
             transform: translateY(0) rotate(0);
           }
         }
 
         .character-wrap.sitting {
-          transform: translateY(47px) scale(.92,.84);
+          transform: scaleY(0.78) translateY(55px);
         }
 
-        .character-wrap.sitting .avatar-legs {
-          transform: translateY(-6px) rotate(-1deg);
-          transform-origin: 50% 0%;
+        .avatar-ground {
+          position: absolute;
+          bottom: 23px;
+          width: 210px;
+          height: 22px;
+          border-radius: 50%;
+          background: #a58bcf33;
+          filter: blur(7px);
         }
 
-        .character-wrap.sitting .left-arm {
-          transform: rotate(-25deg);
-          transform-origin: 90% 10%;
-        }
-
-        .character-wrap.sitting .right-arm {
-          transform: rotate(25deg);
-          transform-origin: 10% 10%;
-        }
-
-        .character-wrap.sitting .avatar-body {
-          transform: translateY(12px);
-          transform-origin: center top;
-        }
-
-        .avatar-legs,
-        .avatar-body,
-        .left-arm,
-        .right-arm {
-          transition: transform .3s ease;
+        .avatar-glow {
+          position: absolute;
+          bottom: 32px;
+          width: 240px;
+          height: 80px;
+          border-radius: 50%;
+          background: #bba3ed22;
+          filter: blur(25px);
         }
 
         .movement-pill {
           position: absolute;
-          z-index: 5;
-          bottom: 17px;
+          bottom: 16px;
           left: 50%;
-          transform: translateX(-50%);
+          z-index: 3;
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: 10px 17px;
-          background: #fff;
-          border: 1px solid #e8e3f3;
+          padding: 10px 15px;
+          border: 1px solid #e6def2;
           border-radius: 30px;
-          box-shadow: 0 6px 20px #4c3d7712;
-          color: #715dc2;
-          font-size: 12px;
-          font-weight: 800;
-          white-space: nowrap;
+          background: #ffffffdf;
+          color: #68538e;
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: 1px;
+          transform: translateX(-50%);
+          box-shadow: 0 5px 15px #46365d0d;
         }
 
         .movement-pill-dot {
-          width: 8px;
-          height: 8px;
-          background: #8a75db;
+          width: 7px;
+          height: 7px;
           border-radius: 50%;
+          background: #8d71d1;
         }
 
         .playground-controls {
           display: flex;
-          align-items: center;
-          justify-content: space-between;
+          flex-wrap: wrap;
           gap: 12px;
-          padding: 18px 22px;
+          margin-top: 20px;
         }
 
         .primary-button,
         .reset-button {
-          border: 0;
-          border-radius: 12px;
-          padding: 13px 17px;
-          display: flex;
+          display: inline-flex;
+          min-height: 46px;
           align-items: center;
           justify-content: center;
           gap: 9px;
-          font-size: 13px;
-          font-weight: 800;
+          padding: 0 18px;
+          border: 0;
+          border-radius: 12px;
           cursor: pointer;
-          transition: transform .15s, opacity .15s;
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.5px;
+          transition: 0.2s;
         }
 
         .primary-button {
+          flex: 1;
           color: white;
-          background: linear-gradient(135deg, #8e76dc, #6955c7);
-          box-shadow: 0 6px 15px #7962ce30;
+          background: linear-gradient(135deg, #a98ae9, #785bd0);
+          box-shadow: 0 7px 18px #8b6bd044;
         }
 
-        .reset-button {
-          background: #f3f0fb;
-          color: #7464b7;
-        }
-
-        .primary-button:hover,
-        .reset-button:hover {
-          transform: translateY(-1px);
+        .primary-button:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 22px #8b6bd055;
         }
 
         .primary-button:disabled {
-          opacity: .6;
-          cursor: wait;
+          cursor: not-allowed;
+          opacity: 0.55;
+        }
+
+        .reset-button {
+          color: #77658e;
+          background: #f3eff9;
+        }
+
+        .reset-button:hover {
+          background: #ebe4f5;
         }
 
         .side-column {
           display: flex;
           flex-direction: column;
-          gap: 17px;
+          gap: 18px;
         }
 
         .side-panel {
-          padding: 19px;
+          padding: 20px;
         }
 
         .panel-heading {
           display: flex;
           align-items: center;
           gap: 9px;
-          margin-bottom: 16px;
-          font-size: 14px;
-          font-weight: 800;
+          margin-bottom: 17px;
+          color: #55446f;
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 1px;
         }
 
-        .panel-heading svg {
-          color: #826bd0;
+        .panel-heading :global(svg) {
+          color: #9679d3;
         }
 
         .camera-preview {
-          min-height: 190px;
-          border-radius: 13px;
-          background: #211e32;
-          overflow: hidden;
+          position: relative;
           display: flex;
+          width: 100%;
+          aspect-ratio: 4 / 3;
           align-items: center;
           justify-content: center;
-          position: relative;
+          overflow: hidden;
+          border: 1px solid #e8e1f0;
+          border-radius: 14px;
+          background: #f3f0f7;
         }
 
-        .camera-preview canvas {
+        .camera-preview video {
+          display: block;
           width: 100%;
           height: 100%;
           object-fit: cover;
-          display: block;
+          transform: scaleX(-1);
         }
 
         .camera-empty {
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 10px;
-          color: #b4adc9;
-          font-size: 12px;
+          gap: 12px;
           padding: 20px;
+          color: #a69bb5;
           text-align: center;
         }
 
-        .camera-empty svg {
-          color: #9d8bda;
+        .camera-empty span {
+          max-width: 180px;
+          font-size: 11px;
+          line-height: 1.5;
         }
 
         .prediction-info {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 10px;
-          margin-top: 17px;
-          font-size: 12px;
+          gap: 12px;
+          padding: 14px 0;
+          border-bottom: 1px solid #f0ecf4;
+        }
+
+        .prediction-info:last-child {
+          border-bottom: 0;
         }
 
         .prediction-info span {
-          color: #9993a8;
+          color: #9a91a5;
+          font-size: 11px;
         }
 
         .prediction-info strong {
-          color: #6956c3;
           max-width: 60%;
+          overflow: hidden;
+          color: #594774;
+          font-size: 12px;
           text-align: right;
+          text-overflow: ellipsis;
+        }
+
+        .error-box {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          margin-top: 15px;
+          padding: 13px;
+          border: 1px solid #f4d5d9;
+          border-radius: 12px;
+          background: #fff6f7;
+          color: #a64f60;
+          font-size: 11px;
+          line-height: 1.6;
           overflow-wrap: anywhere;
         }
 
-        .confidence-bar {
-          height: 8px;
-          border-radius: 20px;
-          background: #efedf5;
-          overflow: hidden;
-          margin-top: 9px;
-        }
-
-        .confidence-fill {
-          height: 100%;
-          border-radius: inherit;
-          background: linear-gradient(90deg, #b19ce9, #745dcf);
-          transition: width .15s ease;
-        }
-
-        .confidence-caption {
-          margin-top: 7px;
-          display: flex;
-          justify-content: space-between;
-          color: #aaa4b5;
-          font-size: 10px;
+        .error-box :global(svg) {
+          flex-shrink: 0;
+          margin-top: 1px;
         }
 
         .command-list {
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: 12px;
         }
 
         .command {
           display: flex;
           align-items: center;
           gap: 12px;
-          border: 1px solid #f0edf6;
+          padding: 12px;
+          border: 1px solid #f0ecf5;
           border-radius: 12px;
-          padding: 11px;
+          background: #fcfbfe;
         }
 
         .command-icon {
-          width: 39px;
-          height: 39px;
-          flex-shrink: 0;
-          border-radius: 12px;
           display: grid;
+          width: 38px;
+          height: 38px;
+          flex-shrink: 0;
           place-items: center;
-          font-size: 20px;
-          background: #f1edff;
+          border-radius: 11px;
+          background: #f0eafa;
+          font-size: 18px;
         }
 
         .command strong {
           display: block;
-          font-size: 12px;
-          color: #514b68;
+          margin-bottom: 4px;
+          color: #594774;
+          font-size: 11px;
         }
 
         .command small {
           display: block;
-          margin-top: 4px;
-          color: #a29caf;
+          color: #9a91a5;
           font-size: 10px;
-        }
-
-        .error-message {
-          display: flex;
-          gap: 9px;
-          align-items: flex-start;
-          margin-top: 14px;
-          padding: 12px;
-          background: #fff0f1;
-          color: #ad3f51;
-          border: 1px solid #f8d9de;
-          border-radius: 11px;
-          font-size: 12px;
-          line-height: 1.5;
-          overflow-wrap: anywhere;
-        }
-
-        .settings-reminder {
-          margin-top: 13px;
-          color: #9a94a9;
-          font-size: 11px;
-          line-height: 1.6;
+          line-height: 1.4;
         }
 
         .footer {
-          margin: 22px 0 4px;
-          text-align: center;
-          color: #aaa4b6;
-          font-size: 10px;
+          margin-top: 30px;
+          color: #b0a7bb;
+          font-size: 9px;
+          font-weight: 800;
           letter-spacing: 1.5px;
+          text-align: center;
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 850px) {
           .main-layout {
             grid-template-columns: 1fr;
           }
 
           .side-column {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
 
-        @media (max-width: 600px) {
-          .motion-page {
-            padding: 14px;
+        @media (max-width: 560px) {
+          .page {
+            padding: 20px 12px;
           }
 
           .topbar {
             align-items: flex-start;
+            margin-bottom: 35px;
           }
 
-          .brand-title {
-            font-size: 15px;
+          .topbar-right {
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
           }
 
-          .brand-subtitle {
+          .connection-status {
             font-size: 9px;
           }
 
-          .top-actions {
-            flex-direction: column;
-            align-items: flex-end;
+          .brand {
+            font-size: 16px;
           }
 
-          .connection-status,
-          .settings-link {
-            padding: 8px 10px;
-            font-size: 10px;
+          .playground {
+            padding: 14px;
+          }
+
+          .playground-heading {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+
+          .arena {
+            min-height: 420px;
+          }
+
+          .avatar-scene {
+            height: 370px;
+          }
+
+          .character-wrap {
+            width: 235px;
+            height: 340px;
           }
 
           .side-column {
             display: flex;
           }
 
-          .arena {
-            min-height: 460px;
-          }
-
-          .avatar-scene {
-            transform: scale(.9);
-          }
-
           .playground-controls {
             flex-direction: column;
-            align-items: stretch;
           }
 
-          .playground-controls button {
+          .primary-button,
+          .reset-button {
             width: 100%;
           }
         }
       `}</style>
 
-      <div className="motion-container">
+      <div className="app-container">
         <header className="topbar">
-          <Link href="/" className="brand">
-            <div className="brand-mark">
-              <Brain size={25} />
+          <div className="brand">
+            <div className="brand-icon">
+              <Brain size={22} />
             </div>
+            <span>AI Motion Studio</span>
+          </div>
 
-            <div>
-              <div className="brand-title">AI MOTION STUDIO</div>
-              <div className="brand-subtitle">GESTURE CONTROL LAB</div>
-            </div>
-          </Link>
-
-          <div className="top-actions">
+          <div className="topbar-right">
             <div className="connection-status">
               <span
                 className={`connection-dot ${
                   cameraStarted ? "connected" : ""
                 }`}
               />
-
               {cameraStarted ? "AI CONNECTED" : "AI NOT CONNECTED"}
             </div>
 
@@ -1396,7 +1392,6 @@ export default function Home() {
 
               <div className="movement-pill">
                 <span className="movement-pill-dot" />
-
                 {jumping
                   ? "JUMPING!"
                   : movement === "SIT"
@@ -1425,6 +1420,13 @@ export default function Home() {
                 RESET AVATAR
               </button>
             </div>
+
+            {error && (
+              <div className="error-box">
+                <AlertCircle size={17} />
+                <span>{error}</span>
+              </div>
+            )}
           </section>
 
           <aside className="side-column">
@@ -1434,7 +1436,17 @@ export default function Home() {
                 AI CAMERA
               </div>
 
-              <div className="camera-preview" ref={cameraContainerRef}>
+              <div className="camera-preview">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  style={{
+                    display: cameraReady ? "block" : "none",
+                  }}
+                />
+
                 {!cameraReady && (
                   <div className="camera-empty">
                     <Camera size={32} />
@@ -1453,39 +1465,10 @@ export default function Home() {
                 <strong>{confidence}%</strong>
               </div>
 
-              <div className="confidence-bar">
-                <div
-                  className="confidence-fill"
-                  style={{ width: `${confidence}%` }}
-                />
+              <div className="prediction-info">
+                <span>AI Model</span>
+                <strong>{modelReady ? "LOADED" : "NOT LOADED"}</strong>
               </div>
-
-              <div className="confidence-caption">
-                <span>0%</span>
-                <span>Required: {settings?.confidence ?? 85}%</span>
-                <span>100%</span>
-              </div>
-
-              {error && (
-                <div className="error-message">
-                  <AlertCircle size={17} />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              {settingsLoaded && !settings?.modelUrl && (
-                <p className="settings-reminder">
-                  No saved model found. Visit Settings to connect your
-                  Teachable Machine model.
-                </p>
-              )}
-
-              {settings?.modelUrl && (
-                <p className="settings-reminder">
-                  Saved AI model detected. Your saved confidence setting
-                  will be used automatically.
-                </p>
-              )}
             </section>
 
             <section className="side-panel">
@@ -1497,7 +1480,6 @@ export default function Home() {
               <div className="command-list">
                 <div className="command">
                   <div className="command-icon">⬆️</div>
-
                   <div>
                     <strong>JUMP</strong>
                     <small>Jump up and land automatically</small>
@@ -1506,7 +1488,6 @@ export default function Home() {
 
                 <div className="command">
                   <div className="command-icon">🪑</div>
-
                   <div>
                     <strong>SIT</strong>
                     <small>DUCK classes make the avatar sit</small>
@@ -1515,7 +1496,6 @@ export default function Home() {
 
                 <div className="command">
                   <div className="command-icon">🧍</div>
-
                   <div>
                     <strong>NEUTRAL</strong>
                     <small>Stand in the normal position</small>
