@@ -166,8 +166,7 @@ export default function Home() {
           video: {
             facingMode: "user",
             width: 320,
-            height: 240,
-            frameRate: { ideal: 24, max: 30 },
+            frameRate: { ideal: 15, max: 20 },
           },
           audio: false,
         });
@@ -192,13 +191,17 @@ export default function Home() {
 
   
   // Fast AI prediction loop. Each confident prediction is acted on immediately.
+ 
+  // AI prediction loop: prioritize smooth game performance.
   useEffect(() => {
     if (!cameraReady || !modelReady || !aiEnabled) return;
 
     let active = true;
     let timer = null;
+    let lastUIUpdate = 0;
 
-    const PREDICTION_INTERVAL = 50;
+    const PREDICTION_INTERVAL = 150;
+    const UI_UPDATE_INTERVAL = 250;
 
     const predict = async () => {
       if (!active) return;
@@ -227,17 +230,25 @@ export default function Home() {
         const recognized =
           bestProbability >= confidenceThresholdRef.current;
 
-        setConfidence(bestProbability);
-
-        setPrediction(
-          recognized ? bestMovement.toUpperCase() : "Waiting"
-        );
-
-        // Act immediately when a movement passes the confidence threshold.
-        // Ignore uncertain predictions instead of delaying or cancelling
-        // the last confidently recognized movement.
-        if (recognized) {
+        // Send the command immediately, but only when it changes.
+        if (
+          recognized &&
+          controlRef.current !== bestMovement
+        ) {
           setControl(bestMovement);
+        }
+
+        // Update the visible prediction less frequently to
+        // avoid unnecessary React rendering.
+        const now = performance.now();
+
+        if (now - lastUIUpdate >= UI_UPDATE_INTERVAL) {
+          lastUIUpdate = now;
+
+          setConfidence(bestProbability);
+          setPrediction(
+            recognized ? bestMovement.toUpperCase() : "Waiting"
+          );
         }
       } catch (error) {
         console.error("AI prediction error:", error);
@@ -255,7 +266,6 @@ export default function Home() {
       if (timer) clearTimeout(timer);
     };
   }, [cameraReady, modelReady, aiEnabled, setControl]);
-
 
   // Stop the camera when the page is closed.
   useEffect(() => {
