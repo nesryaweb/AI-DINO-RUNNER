@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -188,8 +189,9 @@ export default function Home() {
       );
     }
   };
-    // AI prediction loop: one confident movement changes the game command immediately.
-  // Predictions are sequential, so a slow prediction can never overlap another one.
+
+  // AI prediction loop.
+  // Predictions are sequential, so they cannot overlap.
   useEffect(() => {
     if (!cameraReady || !modelReady || !aiEnabled) return;
 
@@ -215,7 +217,7 @@ export default function Home() {
         const results = await modelRef.current.predict(video);
         if (!active) return;
 
-        // Combine JUMP1/JUMP2/... into one JUMP probability, etc.
+        // Combine JUMP1/JUMP2/... into one JUMP probability.
         const grouped = getGroupedPredictions(results);
 
         const [bestMovement, bestProbability] =
@@ -228,8 +230,7 @@ export default function Home() {
         const recognized =
           bestProbability >= confidenceThresholdRef.current;
 
-        // Ignore uncertain frames. In particular, NEVER turn uncertainty
-        // into NEUTRAL, because that would release a held DUCK command.
+        // Ignore uncertain frames.
         // Numbered classes within the same movement do not retrigger it.
         if (recognized && bestMovement !== lastSentMovement) {
           lastSentMovement = bestMovement;
@@ -237,6 +238,7 @@ export default function Home() {
         }
 
         const now = performance.now();
+
         if (now - lastUIUpdate >= UI_UPDATE_INTERVAL) {
           lastUIUpdate = now;
           setConfidence(bestProbability);
@@ -496,7 +498,6 @@ export default function Home() {
               />
             </div>
           </div>
-                    </div>
 
           <div className="movement-list">
             <div className="movement-list-heading">
@@ -717,7 +718,6 @@ function Game({
       if (isDucking) {
         const duckFrame = Math.floor(state.frame / 8) % 2;
 
-        // Original ducking frames.
         sourceX = duckFrame === 0 ? 264 : 323;
 
         sourceWidth = DUCK_WIDTH;
@@ -729,10 +729,8 @@ function Game({
         drawHeight = DUCK_HEIGHT;
       } else {
         if (d.jumping) {
-          // Original jumping pose.
           sourceX = 0;
         } else {
-          // Original running frames.
           const runningFrame = Math.floor(state.frame / 5) % 2;
           sourceX = runningFrame === 0 ? 88 : 132;
         }
@@ -845,7 +843,8 @@ function Game({
         ctx.textAlign = "center";
         ctx.fillStyle = "#535353";
         ctx.font = "bold 32px Arial";
-                ctx.fillText(
+
+        ctx.fillText(
           state.gameOver ? "GAME OVER!" : "READY TO RUN?",
           canvas.width / 2,
           145
@@ -894,15 +893,14 @@ function Game({
 
       const action = controlRef.current;
 
-      // JUMP: start once when the command changes to jump.
-      // Gravity brings the dinosaur back down automatically.
+      // Jump only once when the command changes to jump.
       if (action === "jump" && state.lastAction !== "jump") {
         jump();
       }
 
       state.lastAction = action;
 
-      // DUCK stays active until a confident JUMP or NEUTRAL arrives.
+      // Duck remains active until a new confident command arrives.
       if (action === "jump") {
         state.dino.ducking = false;
       } else if (action === "duck" && !state.dino.jumping) {
@@ -967,7 +965,7 @@ function Game({
         }
       });
 
-      // Collision dimensions match the original sprite proportions.
+      // Collision dimensions match the Dino sprite proportions.
       const d = state.dino;
       const isDucking = d.ducking && !d.jumping;
 
@@ -1000,8 +998,8 @@ function Game({
       }
 
       // Only update React when the visible integer score changes.
-      // Updating React on every animation frame can make the game stutter.
       const visibleScore = Math.floor(state.score);
+
       if (visibleScore !== state.lastDisplayedScore) {
         state.lastDisplayedScore = visibleScore;
         scoreCallbackRef.current(visibleScore);
