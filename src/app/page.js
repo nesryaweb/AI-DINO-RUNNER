@@ -3,15 +3,22 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as tmImage from "@teachablemachine/image";
+import {
+  Brain,
+  Camera,
+  RefreshCw,
+  Play,
+  Pause,
+  Activity,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
 
-const ENV_MODEL_URL = process.env.NEXT_PUBLIC_TEACHABLE_MACHINE_MODEL_URL;
-const SETTINGS_KEY = "ai-dino-settings";
+const MODEL_URL =
+  process.env.NEXT_PUBLIC_TEACHABLE_MACHINE_MODEL_URL || "";
 
-const MOVEMENTS = [
-  { name: "Jump", key: "jump", symbol: "↑", description: "Jump up" },
-  { name: "Duck", key: "duck", symbol: "↓", description: "Crouch down" },
-  { name: "Neutral", key: "neutral", symbol: "●", description: "Stand normally" },
-];
+const CONFIDENCE_THRESHOLD = 0.75;
+const PREDICTION_INTERVAL = 100;
 
 function getMovementGroup(label) {
   const normalized = String(label || "")
@@ -20,1060 +27,966 @@ function getMovementGroup(label) {
     .replace(/\s+/g, "");
 
   if (/^jump\d*$/.test(normalized)) return "jump";
-  if (/^duck\d*$/.test(normalized)) return "duck";
+  if (/^(duck|sit)\d*$/.test(normalized)) return "sit";
   if (/^neutral\d*$/.test(normalized)) return "neutral";
 
   return null;
 }
 
-function getGroupedPredictions(results) {
-  const groups = { jump: 0, duck: 0, neutral: 0 };
-
-  results.forEach((result) => {
-    const group = getMovementGroup(result.className);
-    if (group) groups[group] += result.probability;
-  });
-
-  return groups;
-}
-
-function getClassCount(classes, movement) {
-  return classes.filter(
-    (label) => getMovementGroup(label) === movement
-  ).length;
-}
-
-export default function Home() {
-  const videoRef = useRef(null);
-  const modelRef = useRef(null);
-  const streamRef = useRef(null);
-  const controlRef = useRef("neutral");
-  const confidenceThresholdRef = useRef(0.85);
-
-  const [cameraReady, setCameraReady] = useState(false);
-  const [modelReady, setModelReady] = useState(false);
-  const [cameraError, setCameraError] = useState("");
-  const [aiError, setAiError] = useState("");
-  const [prediction, setPrediction] = useState("Waiting");
-  const [confidence, setConfidence] = useState(0);
-  const [classes, setClasses] = useState([]);
-  const [gameKey, setGameKey] = useState(0);
-  const [gameStatus, setGameStatus] = useState("ready");
-  const [score, setScore] = useState(0);
-  const [bestScore, setBestScore] = useState(0);
-  const [aiEnabled, setAiEnabled] = useState(true);
-
-  const setControl = useCallback((action) => {
-    controlRef.current = action;
-  }, []);
-
-  // Hidden Settings shortcut: Ctrl + Shift + S.
-  useEffect(() => {
-    const handleSettingsShortcut = (event) => {
-      if (
-        event.ctrlKey &&
-        event.shiftKey &&
-        event.code === "KeyS"
-      ) {
-        event.preventDefault();
-        window.location.href = "/settings";
-      }
-    };
-
-    window.addEventListener("keydown", handleSettingsShortcut);
-
-    return () => {
-      window.removeEventListener("keydown", handleSettingsShortcut);
-    };
-  }, []);
-
-  const startAI = async () => {
-    try {
-      setCameraError("");
-      setAiError("");
-
-      let savedSettings = null;
-
-      try {
-        savedSettings = JSON.parse(
-          window.localStorage.getItem(SETTINGS_KEY) || "null"
-        );
-      } catch {
-        savedSettings = null;
-      }
-
-      const configuredModelUrl =
-        savedSettings?.modelUrl || ENV_MODEL_URL;
-
-      const configuredConfidence = Number(
-        savedSettings?.confidence ?? 85
-      );
-
-      if (
-        !configuredModelUrl ||
-        configuredModelUrl.includes("YOUR_MODEL_ID")
-      ) {
-        throw new Error(
-          "Open Settings using Ctrl + Shift + S and add your Teachable Machine model URL."
-        );
-      }
-
-      if (
-        Number.isNaN(configuredConfidence) ||
-        configuredConfidence < 1 ||
-        configuredConfidence > 100
-      ) {
-        throw new Error(
-          "Your confidence setting must be between 1 and 100."
-        );
-      }
-
-      confidenceThresholdRef.current =
-        configuredConfidence / 100;
-
-      if (!modelRef.current) {
-        const modelURL = configuredModelUrl.endsWith("/")
-          ? configuredModelUrl
-          : configuredModelUrl + "/";
-
-        modelRef.current = await tmImage.load(
-          modelURL + "model.json",
-          modelURL + "metadata.json"
-        );
-
-        const loadedClasses = modelRef.current.getClassLabels();
-        setClasses(loadedClasses);
-
-        const jumpCount = getClassCount(loadedClasses, "jump");
-        const duckCount = getClassCount(loadedClasses, "duck");
-        const neutralCount = getClassCount(loadedClasses, "neutral");
-
-        if (
-          jumpCount === 0 ||
-          duckCount === 0 ||
-          neutralCount === 0
-        ) {
-          throw new Error(
-            "Your model needs at least one JUMP, one DUCK, and one NEUTRAL class. Check the class names in Teachable Machine."
-          );
-        }
-
-        setModelReady(true);
-      }
-
-      if (!streamRef.current) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user",
-            width: 320,
-            height: 240,
-            frameRate: { ideal: 15, max: 20 },
-          },
-          audio: false,
-        });
-
-        streamRef.current = stream;
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
-
-        setCameraReady(true);
-      }
-
-      setAiEnabled(true);
-    } catch (error) {
-      setAiError(
-        error.message || "Could not start the AI camera."
-      );
-    }
-  };
-
-  // AI prediction loop.
-  // Predictions are sequential, so they cannot overlap.
-  useEffect(() => {
-    if (!cameraReady || !modelReady || !aiEnabled) return;
-
-    let active = true;
-    let timer = null;
-    let lastUIUpdate = 0;
-    let lastSentMovement = controlRef.current;
-
-    const PREDICTION_INTERVAL = 150;
-    const UI_UPDATE_INTERVAL = 200;
-
-    const predict = async () => {
-      if (!active) return;
-
-      const video = videoRef.current;
-
-      if (!video || video.readyState < 2) {
-        timer = setTimeout(predict, PREDICTION_INTERVAL);
-        return;
-      }
-
-      try {
-        const results = await modelRef.current.predict(video);
-        if (!active) return;
-
-        // Combine JUMP1/JUMP2/... into one JUMP probability.
-        const grouped = getGroupedPredictions(results);
-
-        const [bestMovement, bestProbability] =
-          Object.entries(grouped).reduce(
-            (best, current) =>
-              current[1] > best[1] ? current : best,
-            ["neutral", 0]
-          );
-
-        const recognized =
-          bestProbability >= confidenceThresholdRef.current;
-
-        // Ignore uncertain frames.
-        // Numbered classes within the same movement do not retrigger it.
-        if (recognized && bestMovement !== lastSentMovement) {
-          lastSentMovement = bestMovement;
-          controlRef.current = bestMovement;
-        }
-
-        const now = performance.now();
-
-        if (now - lastUIUpdate >= UI_UPDATE_INTERVAL) {
-          lastUIUpdate = now;
-          setConfidence(bestProbability);
-          setPrediction(
-            recognized ? bestMovement.toUpperCase() : "Waiting"
-          );
-        }
-      } catch (error) {
-        console.error("AI prediction error:", error);
-      }
-
-      if (active) {
-        timer = setTimeout(predict, PREDICTION_INTERVAL);
-      }
-    };
-
-    predict();
-
-    return () => {
-      active = false;
-      if (timer) clearTimeout(timer);
-    };
-  }, [cameraReady, modelReady, aiEnabled]);
-
-  // Stop the camera when the page is closed.
-  useEffect(() => {
-    return () => {
-      if (streamRef.current) {
-        streamRef.current
-          .getTracks()
-          .forEach((track) => track.stop());
-      }
-    };
-  }, []);
-
-  const restartGame = () => {
-    setScore(0);
-    setControl("neutral");
-    setGameStatus("playing");
-    setGameKey((value) => value + 1);
-  };
-
-  const handleGameOver = (finalScore) => {
-    setScore(finalScore);
-    setBestScore((previous) =>
-      Math.max(previous, finalScore)
-    );
-    setGameStatus("over");
-  };
-
-  const toggleAI = () => {
-    setAiEnabled((value) => !value);
-    setControl("neutral");
-    setPrediction("Waiting");
-    setConfidence(0);
-  };
+function Avatar({ movement, jumping }) {
+  const sitting = movement === "sit";
 
   return (
-    <main className="page">
-      <header className="header">
-        <a className="brand" href="#">
-          <span className="brand-icon">✦</span>
-          AI MOTION LAB
-        </a>
+    <div className="avatar-stage">
+      <div className={`avatar ${jumping ? "jumping" : ""} ${sitting ? "sitting" : ""}`}>
+        <div className="avatar-shadow" />
 
-        <div className="header-status">
-          <span className={`dot ${modelReady ? "active" : ""}`} />
-          {modelReady
-            ? "AI MODEL CONNECTED"
-            : "AI MODEL NOT CONNECTED"}
-        </div>
-      </header>
-
-      <section className="hero">
-        <div className="eyebrow">
-          <span className="eyebrow-line" />
-          OUR ARTIFICIAL INTELLIGENCE PROJECT
-          <span className="eyebrow-line" />
-        </div>
-
-        <h1>
-          AI DINO <span>RUNNER</span>
-        </h1>
-
-        <p className="subtitle">
-          Can you control a dinosaur using only your body movements?
-        </p>
-
-        <div className="hero-pills">
-          <span>✦ Artificial Intelligence</span>
-          <span>● Teachable Machine</span>
-          <span>⌁ Motion Recognition</span>
-        </div>
-      </section>
-
-      <section className="game-layout">
-        <div className="game-panel">
-          <div className="game-panel-heading">
-            <div>
-              <span className="section-kicker">LET'S PLAY</span>
-              <h2>Dinosaur Adventure</h2>
-            </div>
-
-            <span className={`playing-badge ${gameStatus}`}>
-              <span />
-              {gameStatus === "playing"
-                ? "PLAYING"
-                : gameStatus === "over"
-                  ? "GAME OVER"
-                  : "READY"}
-            </span>
-          </div>
-
-          <div className="game-scorebar">
-            <div className="score-item">
-              <span className="score-icon">🏆</span>
-              <div>
-                <span className="small-label">YOUR SCORE</span>
-                <strong>{score}</strong>
-              </div>
-            </div>
-
-            <div className="score-divider" />
-
-            <div className="score-item">
-              <span className="score-icon">⭐</span>
-              <div>
-                <span className="small-label">BEST SCORE</span>
-                <strong>{bestScore}</strong>
-              </div>
-            </div>
-
-            <div className="game-hint">
-              {gameStatus === "playing"
-                ? "Keep going!"
-                : "Ready for an adventure?"}
-            </div>
-          </div>
-
-          <Game
-            key={gameKey}
-            controlRef={controlRef}
-            gameStatus={gameStatus}
-            setGameStatus={setGameStatus}
-            setScore={setScore}
-            onGameOver={handleGameOver}
-          />
-
-          <div className="game-actions">
-            <button
-              className="primary-button"
-              onClick={restartGame}
-            >
-              <span>▶</span>
-              {gameStatus === "playing"
-                ? "RESTART GAME"
-                : "START GAME"}
-            </button>
-
-            <p className="keyboard-hint">
-              <kbd>SPACE</kbd> or <kbd>↑</kbd> JUMP
-              <span>·</span>
-              <kbd>↓</kbd> DUCK
-            </p>
-          </div>
-        </div>
-
-        <aside className="ai-panel">
-          <div className="ai-panel-heading">
-            <div className="ai-heading-icon">✧</div>
-            <div>
-              <span className="section-kicker">
-                BODY MOVEMENT CONTROL
-              </span>
-              <h2>AI Control Center</h2>
-            </div>
-          </div>
-
-          <div className="camera-frame">
-            <video
-              ref={videoRef}
-              autoPlay
-              muted
-              playsInline
-              className={`camera-video ${
-                cameraReady ? "" : "hidden"
-              }`}
-            />
-
-            {!cameraReady && (
-              <div className="camera-placeholder">
-                <div className="camera-placeholder-icon">◎</div>
-                <strong>Your camera goes here</strong>
-                <p>
-                  Connect the camera to let AI see your movements.
-                </p>
-              </div>
-            )}
-
-            <span
-              className={`camera-label ${
-                cameraReady ? "live" : ""
-              }`}
-            >
-              <span />
-              {cameraReady ? "LIVE CAMERA" : "CAMERA OFF"}
-            </span>
-          </div>
-
-          <button
-            className="primary-button camera-button"
-            onClick={startAI}
-            disabled={cameraReady && modelReady}
-          >
-            {cameraReady && modelReady
-              ? "✓ AI CAMERA CONNECTED"
-              : "CONNECT AI + CAMERA"}
-          </button>
-
-          {cameraError && (
-            <p className="error">{cameraError}</p>
-          )}
-
-          {aiError && (
-            <p className="error">{aiError}</p>
-          )}
-
-          <div className="prediction-box">
-            <div className="prediction-top">
-              <span className="small-label">
-                AI DETECTED MOVEMENT
-              </span>
-
-              <span className="live-indicator">
+        <div className="avatar-character">
+          <div className="avatar-head">
+            <div className="avatar-hair" />
+            <div className="avatar-face">
+              <div className="avatar-eyes">
                 <span />
-                LIVE
-              </span>
-            </div>
-
-            <h3 className="prediction-value">
-              {prediction.toUpperCase()}
-            </h3>
-
-            <div className="confidence-row">
-              <span>AI confidence</span>
-              <strong>
-                {(confidence * 100).toFixed(1)}%
-              </strong>
-            </div>
-
-            <div className="confidence-track">
-              <div
-                className="confidence-fill"
-                style={{
-                  width: `${confidence * 100}%`,
-                }}
-              />
+                <span />
+              </div>
+              <div className="avatar-smile" />
             </div>
           </div>
 
-          <div className="movement-list">
-            <div className="movement-list-heading">
-              <h3>TRAINED MOVEMENTS</h3>
-              <span>3 MOVEMENTS</span>
-            </div>
+          <div className="avatar-neck" />
 
-            {MOVEMENTS.map((movement) => {
-              const count = getClassCount(
-                classes,
-                movement.key
-              );
-
-              const loaded = count > 0;
-
-              return (
-                <div
-                  className="movement-item"
-                  key={movement.key}
-                >
-                  <span className="movement-symbol">
-                    {movement.symbol}
-                  </span>
-
-                  <div className="movement-name">
-                    <strong>{movement.name}</strong>
-                    <span>{movement.description}</span>
-                  </div>
-
-                  <span
-                    className={`movement-state ${
-                      loaded ? "loaded" : ""
-                    }`}
-                  >
-                    {loaded
-                      ? `${count} CLASSES`
-                      : "NOT FOUND"}
-                  </span>
-                </div>
-              );
-            })}
+          <div className="avatar-body">
+            <div className="avatar-shirt" />
+            <div className="avatar-arm left-arm" />
+            <div className="avatar-arm right-arm" />
           </div>
 
-          <button
-            className="secondary-button"
-            onClick={toggleAI}
-          >
-            {aiEnabled
-              ? "Ⅱ  PAUSE AI CONTROL"
-              : "▶  RESUME AI CONTROL"}
-          </button>
-
-          <p className="camera-note">
-            You can also play with your keyboard if the camera is
-            not connected.
-          </p>
-        </aside>
-      </section>
-
-      <section className="instructions">
-        <div className="instructions-heading">
-          <span className="section-kicker">HOW IT WORKS</span>
-          <h2>Three movements. One dinosaur.</h2>
-          <p>
-            Train the AI, show it your movements, and watch the
-            dinosaur react!
-          </p>
-        </div>
-
-        <div className="instruction-grid">
-          <div className="instruction-card">
-            <div className="instruction-icon jump-icon">↑</div>
-            <div>
-              <h3>JUMP</h3>
-              <p>
-                Raise your body or perform your trained jump
-                movement to jump over obstacles.
-              </p>
-            </div>
-            <span className="instruction-number">01</span>
-          </div>
-
-          <div className="instruction-card">
-            <div className="instruction-icon duck-icon">↓</div>
-            <div>
-              <h3>DUCK</h3>
-              <p>
-                Crouch down to make the dinosaur duck under
-                flying obstacles.
-              </p>
-            </div>
-            <span className="instruction-number">02</span>
-          </div>
-
-          <div className="instruction-card">
-            <div className="instruction-icon neutral-icon">●</div>
-            <div>
-              <h3>NEUTRAL</h3>
-              <p>
-                Stand normally and let your dinosaur keep running.
-              </p>
-            </div>
-            <span className="instruction-number">03</span>
+          <div className="avatar-legs">
+            <div className="avatar-leg left-leg" />
+            <div className="avatar-leg right-leg" />
           </div>
         </div>
-      </section>
+      </div>
 
-      <footer>
-        <div className="footer-brand">✦ AI MOTION LAB</div>
-        <p>A STUDENT SCIENCE FAIR PROJECT</p>
-        <span>POWERED BY TEACHABLE MACHINE</span>
-      </footer>
-    </main>
+      <div className="ground" />
+    </div>
   );
 }
 
-function Game({
-  controlRef,
-  gameStatus,
-  setGameStatus,
-  setScore,
-  onGameOver,
-}) {
+export default function Home() {
+  const [model, setModel] = useState(null);
+  const [cameraStarted, setCameraStarted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [movement, setMovement] = useState("neutral");
+  const [jumping, setJumping] = useState(false);
+  const [prediction, setPrediction] = useState("NEUTRAL");
+  const [confidence, setConfidence] = useState(0);
+  const [cameraReady, setCameraReady] = useState(false);
+
+  const webcamRef = useRef(null);
   const canvasRef = useRef(null);
-  const statusRef = useRef(gameStatus);
-  const scoreCallbackRef = useRef(setScore);
-  const gameOverCallbackRef = useRef(onGameOver);
-  const gameStatusCallbackRef = useRef(setGameStatus);
+  const modelRef = useRef(null);
+  const runningRef = useRef(false);
+  const movementRef = useRef("neutral");
+  const jumpTimerRef = useRef(null);
+  const animationFrameRef = useRef(null);
+  const lastPredictionRef = useRef(0);
+  const lastJumpRef = useRef(0);
 
-  useEffect(() => {
-    statusRef.current = gameStatus;
-  }, [gameStatus]);
+  const applyMovement = useCallback((nextMovement) => {
+    if (nextMovement === movementRef.current) return;
 
-  useEffect(() => {
-    scoreCallbackRef.current = setScore;
-    gameOverCallbackRef.current = onGameOver;
-    gameStatusCallbackRef.current = setGameStatus;
-  }, [setScore, onGameOver, setGameStatus]);
+    movementRef.current = nextMovement;
+    setMovement(nextMovement);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    const ground = 285;
+    if (nextMovement === "jump") {
+      const now = Date.now();
 
-    // Load the original Chrome Dino sprite sheet.
-    const dinoSprite = new Image();
-    dinoSprite.src = "/dino-sprite.png";
+      // Prevent repeated jumps while the same gesture is held.
+      if (now - lastJumpRef.current < 700) return;
 
-    const state = {
-      dino: {
-        x: 105,
-        y: ground - 47,
-        velocityY: 0,
-        jumping: false,
-        ducking: false,
-      },
+      lastJumpRef.current = now;
+      setJumping(true);
 
-      obstacles: [],
-
-      clouds: [
-        { x: 170, y: 65, size: 1 },
-        { x: 440, y: 105, size: 0.8 },
-        { x: 760, y: 55, size: 1.1 },
-      ],
-
-      frame: 0,
-      score: 0,
-      speed: 5,
-      nextObstacle: 100,
-      lastAction: "neutral",
-      gameOver: false,
-      groundOffset: 0,
-      lastDisplayedScore: -1,
-    };
-
-    const drawCloud = (x, y, scale) => {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.scale(scale, scale);
-
-      ctx.fillStyle = "#d5d5d5";
-      ctx.beginPath();
-      ctx.arc(0, 10, 15, 0, Math.PI * 2);
-      ctx.arc(19, 2, 20, 0, Math.PI * 2);
-      ctx.arc(40, 10, 14, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.restore();
-    };
-
-    // Draw the original Chrome Dino poses from its sprite sheet.
-    const drawDino = () => {
-      const d = state.dino;
-
-      if (!dinoSprite.complete || !dinoSprite.naturalWidth) {
-        return;
+      if (jumpTimerRef.current) {
+        clearTimeout(jumpTimerRef.current);
       }
 
-      const isDucking = d.ducking && !d.jumping;
+      jumpTimerRef.current = setTimeout(() => {
+        setJumping(false);
+      }, 700);
+    } else {
+      setJumping(false);
+    }
+  }, []);
 
-      const SPRITE_X = 848;
-      const SPRITE_Y = 2;
+  const stopCamera = useCallback(() => {
+    runningRef.current = false;
 
-      const RUN_WIDTH = 44;
-      const RUN_HEIGHT = 47;
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
 
-      const DUCK_WIDTH = 59;
-      const DUCK_HEIGHT = 25;
+    if (jumpTimerRef.current) {
+      clearTimeout(jumpTimerRef.current);
+    }
 
-      let sourceX;
-      let sourceWidth;
-      let sourceHeight;
-      let drawX;
-      let drawY;
-      let drawWidth;
-      let drawHeight;
+    if (webcamRef.current) {
+      webcamRef.current.stop();
+      webcamRef.current = null;
+    }
 
-      if (isDucking) {
-        const duckFrame = Math.floor(state.frame / 8) % 2;
+    setCameraStarted(false);
+    setCameraReady(false);
+    setMovement("neutral");
+    setJumping(false);
+    movementRef.current = "neutral";
+  }, []);
 
-        sourceX = duckFrame === 0 ? 264 : 323;
+  const predict = useCallback(async () => {
+    if (!runningRef.current || !modelRef.current || !webcamRef.current) {
+      return;
+    }
 
-        sourceWidth = DUCK_WIDTH;
-        sourceHeight = DUCK_HEIGHT;
+    const now = Date.now();
 
-        drawX = d.x - 5;
-        drawY = ground - DUCK_HEIGHT;
-        drawWidth = DUCK_WIDTH;
-        drawHeight = DUCK_HEIGHT;
-      } else {
-        if (d.jumping) {
-          sourceX = 0;
-        } else {
-          const runningFrame = Math.floor(state.frame / 5) % 2;
-          sourceX = runningFrame === 0 ? 88 : 132;
-        }
+    if (now - lastPredictionRef.current < PREDICTION_INTERVAL) {
+      animationFrameRef.current = requestAnimationFrame(predict);
+      return;
+    }
 
-        sourceWidth = RUN_WIDTH;
-        sourceHeight = RUN_HEIGHT;
+    lastPredictionRef.current = now;
 
-        drawX = d.x;
-        drawY = d.y;
-        drawWidth = RUN_WIDTH;
-        drawHeight = RUN_HEIGHT;
-      }
+    try {
+      webcamRef.current.update();
 
-      ctx.save();
-      ctx.imageSmoothingEnabled = false;
-
-      ctx.drawImage(
-        dinoSprite,
-        SPRITE_X + sourceX,
-        SPRITE_Y,
-        sourceWidth,
-        sourceHeight,
-        Math.round(drawX),
-        Math.round(drawY),
-        drawWidth,
-        drawHeight
+      const predictions = await modelRef.current.predict(
+        webcamRef.current.canvas
       );
 
-      ctx.restore();
-    };
+      if (!runningRef.current) return;
 
-    const drawObstacle = (obstacle) => {
-      ctx.save();
-
-      if (obstacle.type === "bird") {
-        const flap = Math.floor(state.frame / 6) % 2;
-        const x = Math.round(obstacle.x);
-        const y = Math.round(obstacle.y);
-
-        ctx.fillStyle = "#535353";
-
-        ctx.fillRect(x + 5, y + 7, 28, 8);
-        ctx.fillRect(x + 25, y + 2, 10, 9);
-        ctx.fillRect(x + 33, y + 5, 7, 4);
-        ctx.fillRect(x, y + 8, 8, 4);
-
-        if (flap === 0) {
-          ctx.fillRect(x + 12, y, 17, 8);
-          ctx.fillRect(x + 17, y - 5, 9, 7);
-        } else {
-          ctx.fillRect(x + 12, y + 13, 17, 7);
-          ctx.fillRect(x + 17, y + 18, 9, 4);
-        }
-
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(x + 29, y + 4, 3, 3);
-
-        ctx.fillStyle = "#535353";
-        ctx.fillRect(x + 30, y + 5, 1, 1);
-      } else {
-        const x = Math.round(obstacle.x);
-        const y = Math.round(obstacle.y);
-
-        ctx.fillStyle = "#535353";
-
-        ctx.fillRect(x + 12, y, 12, obstacle.height);
-        ctx.fillRect(x + 4, y + 13, 9, 7);
-        ctx.fillRect(x + 4, y + 7, 6, 13);
-        ctx.fillRect(x + 23, y + 22, 9, 7);
-        ctx.fillRect(x + 26, y + 15, 6, 14);
-        ctx.fillRect(x + 15, y - 5, 6, 8);
-      }
-
-      ctx.restore();
-    };
-
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      state.clouds.forEach((cloud) => {
-        drawCloud(cloud.x, cloud.y, cloud.size);
-      });
-
-      ctx.fillStyle = "#535353";
-      ctx.fillRect(0, ground, canvas.width, 2);
-
-      for (let i = 0; i < 22; i++) {
-        const x =
-          ((i * 53 - state.groundOffset * 1.5) %
-            canvas.width +
-            canvas.width) %
-          canvas.width;
-
-        ctx.fillRect(x, ground + 10, 9, 2);
-      }
-
-      state.obstacles.forEach(drawObstacle);
-      drawDino();
-
-      if (
-        statusRef.current === "ready" ||
-        state.gameOver
-      ) {
-        ctx.fillStyle = "rgba(255,255,255,0.78)";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        ctx.textAlign = "center";
-        ctx.fillStyle = "#535353";
-        ctx.font = "bold 32px Arial";
-
-        ctx.fillText(
-          state.gameOver ? "GAME OVER!" : "READY TO RUN?",
-          canvas.width / 2,
-          145
-        );
-
-        ctx.font = "16px Arial";
-        ctx.fillStyle = "#777777";
-
-        ctx.fillText(
-          state.gameOver
-            ? "Press RESTART GAME to try again"
-            : "Press START GAME when you're ready",
-          canvas.width / 2,
-          180
-        );
-
-        ctx.textAlign = "left";
-      }
-    };
-
-    const jump = () => {
-      if (!state.dino.jumping) {
-        state.dino.velocityY = -14;
-        state.dino.jumping = true;
-        state.dino.ducking = false;
-      }
-    };
-
-    const update = (delta) => {
-      if (
-        statusRef.current !== "playing" ||
-        state.gameOver
-      ) {
-        return;
-      }
-
-      const factor = Math.min(delta / 16.67, 3);
-
-      state.frame += factor;
-      state.score += 0.12 * factor;
-      state.speed = Math.min(11, 5 + state.score / 250);
-
-      state.groundOffset =
-        (state.groundOffset + state.speed * factor) %
-        canvas.width;
-
-      const action = controlRef.current;
-
-      // Jump only once when the command changes to jump.
-      if (action === "jump" && state.lastAction !== "jump") {
-        jump();
-      }
-
-      state.lastAction = action;
-
-      // Duck remains active until a new confident command arrives.
-      if (action === "jump") {
-        state.dino.ducking = false;
-      } else if (action === "duck" && !state.dino.jumping) {
-        state.dino.ducking = true;
-      } else if (action === "neutral") {
-        state.dino.ducking = false;
-      }
-
-      if (state.dino.jumping) {
-        state.dino.y +=
-          state.dino.velocityY * factor;
-
-        state.dino.velocityY += 0.7 * factor;
-
-        if (state.dino.y >= ground - 47) {
-          state.dino.y = ground - 47;
-          state.dino.velocityY = 0;
-          state.dino.jumping = false;
-        }
-      }
-
-      // Move existing obstacles.
-      state.obstacles.forEach((obstacle) => {
-        obstacle.x -= state.speed * factor;
-      });
-
-      state.obstacles = state.obstacles.filter(
-        (obstacle) => obstacle.x > -70
+      const best = predictions.reduce((a, b) =>
+        a.probability > b.probability ? a : b
       );
 
-      // Create new obstacles.
-      state.nextObstacle -= factor;
+      const percent = Math.round(best.probability * 100);
+      const group = getMovementGroup(best.className);
 
-      if (state.nextObstacle <= 0) {
-        const type =
-          Math.random() > 0.5 ? "cactus" : "bird";
+      setPrediction(best.className);
+      setConfidence(percent);
 
-        state.obstacles.push({
-          x: canvas.width + 25,
+      if (group && best.probability >= CONFIDENCE_THRESHOLD) {
+        applyMovement(group);
+      } else {
+        // Unknown or low-confidence predictions do not trigger movement.
+        // The avatar stays in its last valid position.
+      }
+    } catch (err) {
+      console.error("Prediction error:", err);
+    }
 
-          // Birds are low enough to hit a standing dinosaur.
-          y:
-            type === "bird"
-              ? ground - 52
-              : ground - 45,
+    if (runningRef.current) {
+      animationFrameRef.current = requestAnimationFrame(predict);
+    }
+  }, [applyMovement]);
 
-          width: type === "bird" ? 40 : 35,
-          height: type === "bird" ? 16 : 45,
-          type,
-        });
+  const startCamera = async () => {
+    if (!MODEL_URL) {
+      setError(
+        "Model URL is missing. Add NEXT_PUBLIC_TEACHABLE_MACHINE_MODEL_URL to your .env.local file."
+      );
+      return;
+    }
 
-        state.nextObstacle =
-          95 + Math.random() * 65;
+    setLoading(true);
+    setError("");
+
+    try {
+      let loadedModel = modelRef.current;
+
+      if (!loadedModel) {
+        loadedModel = await tmImage.load(
+          MODEL_URL + "model.json",
+          MODEL_URL + "metadata.json"
+        );
+
+        modelRef.current = loadedModel;
+        setModel(loadedModel);
       }
 
-      // Move clouds.
-      state.clouds.forEach((cloud) => {
-        cloud.x -= 0.45 * factor;
+      const webcam = new tmImage.Webcam(640, 480, true);
+      await webcam.setup();
+      await webcam.play();
 
-        if (cloud.x < -65) {
-          cloud.x = canvas.width + 35;
-        }
-      });
+      webcamRef.current = webcam;
 
-      // Collision dimensions match the Dino sprite proportions.
-      const d = state.dino;
-      const isDucking = d.ducking && !d.jumping;
-
-      const player = {
-        x: d.x + (isDucking ? 2 : 4),
-        y: isDucking ? ground - 25 : d.y + 4,
-        width: isDucking ? 55 : 40,
-        height: isDucking ? 23 : 40,
-      };
-
-      for (const obstacle of state.obstacles) {
-        const hit =
-          player.x < obstacle.x + obstacle.width - 5 &&
-          player.x + player.width > obstacle.x + 4 &&
-          player.y < obstacle.y + obstacle.height - 3 &&
-          player.y + player.height > obstacle.y + 3;
-
-        if (hit) {
-          state.gameOver = true;
-          statusRef.current = "over";
-
-          gameStatusCallbackRef.current("over");
-
-          gameOverCallbackRef.current(
-            Math.floor(state.score)
-          );
-
-          break;
-        }
+      if (canvasRef.current) {
+        canvasRef.current.innerHTML = "";
+        canvasRef.current.appendChild(webcam.canvas);
       }
 
-      // Only update React when the visible integer score changes.
-      const visibleScore = Math.floor(state.score);
+      runningRef.current = true;
+      setCameraStarted(true);
+      setCameraReady(true);
 
-      if (visibleScore !== state.lastDisplayedScore) {
-        state.lastDisplayedScore = visibleScore;
-        scoreCallbackRef.current(visibleScore);
-      }
-    };
+      lastPredictionRef.current = 0;
+      animationFrameRef.current = requestAnimationFrame(predict);
+    } catch (err) {
+      console.error(err);
+      setError(
+        "Could not start the camera. Check camera permission and make sure no other app is using it."
+      );
+      stopCamera();
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    let animationFrame;
-    let lastFrameTime = 0;
-
-    const drawLoop = (time) => {
-      if (!lastFrameTime) {
-        lastFrameTime = time;
-      }
-
-      const delta = time - lastFrameTime;
-      lastFrameTime = time;
-
-      update(delta);
-      draw();
-
-      animationFrame = requestAnimationFrame(drawLoop);
-    };
-
-    const handleKeyDown = (event) => {
-      if (
-        event.code === "Space" ||
-        event.code === "ArrowUp"
-      ) {
-        event.preventDefault();
-
-        if (statusRef.current === "playing") {
-          controlRef.current = "jump";
-        }
-      }
-
-      if (event.code === "ArrowDown") {
-        event.preventDefault();
-
-        if (statusRef.current === "playing") {
-          controlRef.current = "duck";
-        }
-      }
-    };
-
-    const handleKeyUp = (event) => {
-      if (
-        event.code === "Space" ||
-        event.code === "ArrowUp" ||
-        event.code === "ArrowDown"
-      ) {
-        controlRef.current = "neutral";
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-
-    animationFrame = requestAnimationFrame(drawLoop);
-
+  useEffect(() => {
     return () => {
-      cancelAnimationFrame(animationFrame);
+      runningRef.current = false;
 
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+
+      if (jumpTimerRef.current) {
+        clearTimeout(jumpTimerRef.current);
+      }
+
+      if (webcamRef.current) {
+        webcamRef.current.stop();
+      }
     };
-  }, [controlRef]);
+  }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={900}
-      height={330}
-      className="game-canvas"
-      aria-label="Dinosaur running game"
-    />
+    <main className="page">
+      <style jsx global>{`
+        * {
+          box-sizing: border-box;
+        }
+
+        body {
+          margin: 0;
+          background: #f4f6fb;
+          color: #182033;
+          font-family: Arial, Helvetica, sans-serif;
+        }
+
+        button {
+          font: inherit;
+        }
+
+        .page {
+          min-height: 100vh;
+          padding: 28px;
+        }
+
+        .container {
+          max-width: 1250px;
+          margin: auto;
+        }
+
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 20px;
+          margin-bottom: 25px;
+        }
+
+        .brand {
+          display: flex;
+          align-items: center;
+          gap: 13px;
+        }
+
+        .brand-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: 15px;
+          background: #2563eb;
+          color: white;
+          display: grid;
+          place-items: center;
+        }
+
+        .brand h1 {
+          font-size: 25px;
+          margin: 0;
+        }
+
+        .brand p {
+          color: #778197;
+          margin: 5px 0 0;
+          font-size: 13px;
+        }
+
+        .status {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 15px;
+          background: white;
+          border: 1px solid #e5e9f2;
+          border-radius: 30px;
+          font-size: 13px;
+        }
+
+        .status-dot {
+          width: 9px;
+          height: 9px;
+          border-radius: 50%;
+          background: #9ca3af;
+        }
+
+        .status-dot.active {
+          background: #16a34a;
+        }
+
+        .layout {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 330px;
+          gap: 22px;
+        }
+
+        .game-card,
+        .panel {
+          background: white;
+          border: 1px solid #e5e9f2;
+          border-radius: 20px;
+          overflow: hidden;
+        }
+
+        .game-heading {
+          padding: 20px 24px;
+          border-bottom: 1px solid #edf0f5;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .game-heading h2 {
+          font-size: 17px;
+          margin: 0;
+        }
+
+        .game-heading span {
+          color: #7b8498;
+          font-size: 12px;
+        }
+
+        .arena {
+          min-height: 490px;
+          position: relative;
+          overflow: hidden;
+          background:
+            radial-gradient(circle at 50% 35%, #ffffff 0, #f4f7ff 65%, #eaf0fc 100%);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+        }
+
+        .arena::before {
+          content: "";
+          position: absolute;
+          width: 500px;
+          height: 500px;
+          border: 1px solid #e3eaf8;
+          border-radius: 50%;
+          top: -270px;
+          left: 50%;
+          transform: translateX(-50%);
+        }
+
+        .arena-label {
+          position: absolute;
+          top: 22px;
+          left: 24px;
+          color: #8590a5;
+          font-size: 12px;
+          letter-spacing: 1px;
+          text-transform: uppercase;
+        }
+
+        .avatar-stage {
+          width: 300px;
+          height: 380px;
+          position: relative;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 2;
+        }
+
+        .ground {
+          position: absolute;
+          width: 210px;
+          height: 22px;
+          border-radius: 50%;
+          background: #dce4f1;
+          bottom: 35px;
+        }
+
+        .avatar {
+          position: absolute;
+          width: 190px;
+          height: 300px;
+          bottom: 50px;
+          display: flex;
+          justify-content: center;
+          align-items: flex-end;
+          transform-origin: bottom center;
+          transition: transform 0.2s ease;
+        }
+
+        .avatar-character {
+          position: relative;
+          width: 150px;
+          height: 265px;
+          display: flex;
+          align-items: center;
+          flex-direction: column;
+          transition: transform 0.25s ease;
+        }
+
+        .avatar-head {
+          width: 85px;
+          height: 90px;
+          background: #eebd91;
+          border-radius: 43% 43% 48% 48%;
+          position: relative;
+          z-index: 3;
+          border: 3px solid #27344a;
+          overflow: hidden;
+        }
+
+        .avatar-hair {
+          height: 35px;
+          width: 100%;
+          background: #34251f;
+          border-radius: 45% 45% 10% 10%;
+          position: absolute;
+          top: -5px;
+        }
+
+        .avatar-face {
+          position: absolute;
+          inset: 0;
+        }
+
+        .avatar-eyes {
+          position: absolute;
+          top: 47px;
+          left: 20px;
+          right: 20px;
+          display: flex;
+          justify-content: space-between;
+        }
+
+        .avatar-eyes span {
+          width: 7px;
+          height: 8px;
+          border-radius: 50%;
+          background: #27344a;
+        }
+
+        .avatar-smile {
+          position: absolute;
+          width: 22px;
+          height: 10px;
+          border-bottom: 2px solid #9b4d4d;
+          border-radius: 50%;
+          top: 65px;
+          left: 29px;
+        }
+
+        .avatar-neck {
+          width: 28px;
+          height: 20px;
+          background: #eebd91;
+          border-left: 2px solid #27344a;
+          border-right: 2px solid #27344a;
+          margin-top: -3px;
+          z-index: 2;
+        }
+
+        .avatar-body {
+          width: 112px;
+          height: 105px;
+          background: #4779d8;
+          border: 3px solid #27344a;
+          border-radius: 25px 25px 12px 12px;
+          position: relative;
+          z-index: 2;
+          margin-top: -2px;
+        }
+
+        .avatar-shirt {
+          position: absolute;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 35px;
+          height: 100%;
+          background: #6190e6;
+          opacity: 0.6;
+        }
+
+        .avatar-arm {
+          position: absolute;
+          width: 28px;
+          height: 83px;
+          background: #eebd91;
+          border: 3px solid #27344a;
+          border-radius: 20px;
+          top: 12px;
+          transform-origin: top center;
+        }
+
+        .left-arm {
+          left: -21px;
+          transform: rotate(10deg);
+        }
+
+        .right-arm {
+          right: -21px;
+          transform: rotate(-10deg);
+        }
+
+        .avatar-legs {
+          display: flex;
+          gap: 9px;
+          margin-top: -2px;
+          height: 95px;
+        }
+
+        .avatar-leg {
+          width: 43px;
+          height: 90px;
+          background: #273c64;
+          border: 3px solid #27344a;
+          border-radius: 7px 7px 13px 13px;
+          position: relative;
+        }
+
+        .avatar-leg::after {
+          content: "";
+          position: absolute;
+          bottom: -4px;
+          left: -5px;
+          width: 52px;
+          height: 17px;
+          background: #28344a;
+          border-radius: 12px 12px 5px 5px;
+        }
+
+        .avatar.jumping {
+          animation: jump 0.7s ease-out;
+        }
+
+        @keyframes jump {
+          0% { transform: translateY(0); }
+          35% { transform: translateY(-145px); }
+          65% { transform: translateY(-145px); }
+          100% { transform: translateY(0); }
+        }
+
+        .avatar.sitting .avatar-character {
+          transform: translateY(45px) scaleY(0.78);
+        }
+
+        .avatar.sitting .avatar-legs {
+          transform: rotate(90deg) translate(15px, -18px);
+        }
+
+        .avatar.sitting .left-arm {
+          transform: rotate(65deg);
+        }
+
+        .avatar.sitting .right-arm {
+          transform: rotate(-65deg);
+        }
+
+        .avatar-shadow {
+          display: none;
+        }
+
+        .movement-display {
+          position: absolute;
+          bottom: 18px;
+          left: 50%;
+          transform: translateX(-50%);
+          padding: 10px 19px;
+          border-radius: 30px;
+          background: white;
+          border: 1px solid #e1e7f1;
+          box-shadow: 0 5px 18px #263a5a12;
+          font-size: 13px;
+          font-weight: 700;
+          color: #315da8;
+          white-space: nowrap;
+        }
+
+        .game-controls {
+          padding: 18px 24px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 15px;
+        }
+
+        .main-button {
+          border: 0;
+          background: #2563eb;
+          color: white;
+          border-radius: 11px;
+          padding: 12px 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 9px;
+          cursor: pointer;
+          font-weight: 700;
+        }
+
+        .main-button:disabled {
+          opacity: 0.6;
+          cursor: wait;
+        }
+
+        .secondary-button {
+          border: 1px solid #e2e7f0;
+          background: white;
+          color: #526078;
+          border-radius: 11px;
+          padding: 12px 15px;
+          display: flex;
+          gap: 8px;
+          align-items: center;
+          cursor: pointer;
+        }
+
+        .side {
+          display: flex;
+          flex-direction: column;
+          gap: 18px;
+        }
+
+        .panel {
+          padding: 20px;
+        }
+
+        .panel-title {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          font-weight: 700;
+          font-size: 15px;
+          margin-bottom: 18px;
+        }
+
+        .camera-preview {
+          min-height: 165px;
+          background: #101827;
+          border-radius: 12px;
+          overflow: hidden;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #aab4c7;
+          font-size: 13px;
+          position: relative;
+        }
+
+        .camera-preview canvas {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .camera-placeholder {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .prediction-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-top: 18px;
+          font-size: 13px;
+        }
+
+        .prediction-row strong {
+          color: #2563eb;
+        }
+
+        .confidence-track {
+          height: 8px;
+          border-radius: 20px;
+          background: #edf0f6;
+          margin-top: 9px;
+          overflow: hidden;
+        }
+
+        .confidence-fill {
+          height: 100%;
+          background: #2563eb;
+          border-radius: 20px;
+          transition: width 0.15s;
+        }
+
+        .movement-list {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .movement-item {
+          border: 1px solid #edf0f5;
+          border-radius: 11px;
+          padding: 12px;
+          display: flex;
+          gap: 12px;
+          align-items: center;
+        }
+
+        .movement-icon {
+          width: 37px;
+          height: 37px;
+          border-radius: 10px;
+          background: #eff4ff;
+          display: grid;
+          place-items: center;
+          font-size: 19px;
+        }
+
+        .movement-item strong {
+          display: block;
+          font-size: 13px;
+        }
+
+        .movement-item small {
+          color: #8791a4;
+          font-size: 11px;
+        }
+
+        .error {
+          margin-top: 14px;
+          padding: 12px;
+          border-radius: 10px;
+          background: #fff1f1;
+          color: #b42318;
+          font-size: 12px;
+          line-height: 1.5;
+          display: flex;
+          gap: 8px;
+        }
+
+        .footer-note {
+          color: #8993a6;
+          text-align: center;
+          font-size: 12px;
+          margin-top: 22px;
+        }
+
+        @media (max-width: 850px) {
+          .layout {
+            grid-template-columns: 1fr;
+          }
+
+          .side {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+
+        @media (max-width: 600px) {
+          .page {
+            padding: 14px;
+          }
+
+          .header {
+            align-items: flex-start;
+          }
+
+          .brand h1 {
+            font-size: 20px;
+          }
+
+          .side {
+            display: flex;
+          }
+
+          .arena {
+            min-height: 420px;
+          }
+
+          .game-controls {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .game-controls button {
+            width: 100%;
+          }
+        }
+      `}</style>
+
+      <div className="container">
+        <header className="header">
+          <div className="brand">
+            <div className="brand-icon">
+              <Brain size={25} />
+            </div>
+            <div>
+              <h1>AI Motion Studio</h1>
+              <p>Control an animated avatar with your gestures</p>
+            </div>
+          </div>
+
+          <div className="status">
+            <span className={`status-dot ${cameraStarted ? "active" : ""}`} />
+            {cameraStarted ? "AI is watching" : "Camera disconnected"}
+          </div>
+        </header>
+
+        <div className="layout">
+          <section className="game-card">
+            <div className="game-heading">
+              <h2>Avatar Playground</h2>
+              <span>AI-controlled movement</span>
+            </div>
+
+            <div className="arena">
+              <div className="arena-label">YOUR AVATAR</div>
+
+              <Avatar movement={movement} jumping={jumping} />
+
+              <div className="movement-display">
+                {movement === "jump" && "⬆ JUMPING"}
+                {movement === "sit" && "🪑 SITTING"}
+                {movement === "neutral" && "● STANDING"}
+              </div>
+            </div>
+
+            <div className="game-controls">
+              <button
+                className="main-button"
+                onClick={cameraStarted ? stopCamera : startCamera}
+                disabled={loading}
+              >
+                {cameraStarted ? <Pause size={18} /> : <Play size={18} />}
+                {loading
+                  ? "Starting..."
+                  : cameraStarted
+                    ? "Stop AI Camera"
+                    : "Start AI Camera"}
+              </button>
+
+              <button
+                className="secondary-button"
+                onClick={() => {
+                  applyMovement("neutral");
+                  setPrediction("NEUTRAL");
+                  setConfidence(0);
+                }}
+              >
+                <RefreshCw size={16} />
+                Reset Avatar
+              </button>
+            </div>
+          </section>
+
+          <aside className="side">
+            <section className="panel">
+              <div className="panel-title">
+                <Camera size={18} />
+                AI Camera
+              </div>
+
+              <div className="camera-preview" ref={canvasRef}>
+                {!cameraReady && (
+                  <div className="camera-placeholder">
+                    <Camera size={30} />
+                    <span>Camera preview will appear here</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="prediction-row">
+                <span>Detected class</span>
+                <strong>{prediction}</strong>
+              </div>
+
+              <div className="prediction-row">
+                <span>Confidence</span>
+                <strong>{confidence}%</strong>
+              </div>
+
+              <div className="confidence-track">
+                <div
+                  className="confidence-fill"
+                  style={{ width: `${confidence}%` }}
+                />
+              </div>
+
+              {error && (
+                <div className="error">
+                  <AlertCircle size={17} />
+                  {error}
+                </div>
+              )}
+            </section>
+
+            <section className="panel">
+              <div className="panel-title">
+                <Activity size={18} />
+                Gesture Commands
+              </div>
+
+              <div className="movement-list">
+                <div className="movement-item">
+                  <div className="movement-icon">⬆️</div>
+                  <div>
+                    <strong>JUMP</strong>
+                    <small>Avatar jumps and lands</small>
+                  </div>
+                </div>
+
+                <div className="movement-item">
+                  <div className="movement-icon">🪑</div>
+                  <div>
+                    <strong>SIT</strong>
+                    <small>Avatar stays seated</small>
+                  </div>
+                </div>
+
+                <div className="movement-item">
+                  <div className="movement-icon">🧍</div>
+                  <div>
+                    <strong>NEUTRAL</strong>
+                    <small>Avatar stands normally</small>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+
+        <p className="footer-note">
+          <CheckCircle2
+            size={13}
+            style={{ display: "inline", verticalAlign: "middle" }}
+          />{" "}
+          Powered by Teachable Machine and real-time image recognition
+        </p>
+      </div>
+    </main>
   );
 }
